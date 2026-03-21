@@ -1,0 +1,539 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    x:Class="alphaWriter.Views.WriterPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:models="clr-namespace:alphaWriter.Models"
+    xmlns:vm="clr-namespace:alphaWriter.ViewModels"
+    x:Name="Page"
+    Title="alphaWriter"
+    Shell.NavBarIsVisible="False">
+
+    <!--
+        3-column layout:
+          Col 0 (Auto) Chapters panel (full height, collapsible)
+          Col 1 (2)    Divider
+          Col 2 (*)    Editor (top) + splitter + Scenes (bottom)
+        Auto columns collapse to 0 when IsVisible=False.
+    -->
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="2" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- ── LEFT PANEL: Chapters (full height) ──────────────────────── -->
+        <Grid Grid.Column="0"
+              WidthRequest="200"
+              BackgroundColor="{StaticResource SurfaceMid}"
+              IsVisible="{Binding IsSidebarVisible}"
+              RowDefinitions="Auto,Auto,*">
+
+            <!-- Book selector row -->
+            <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Padding="4,4,4,0">
+                <Button Grid.Column="0"
+                        Text="{Binding CurrentBookTitle}"
+                        Style="{StaticResource BookSelectorButton}"
+                        Command="{Binding SwitchBookCommand}"
+                        ToolTipProperties.Text="Switch book" />
+                <Button Grid.Column="1" Text="..."
+                        Style="{StaticResource IconButton}"
+                        Command="{Binding ManageBooksCommand}"
+                        ToolTipProperties.Text="Manage books" />
+            </Grid>
+
+            <!-- Sidebar tab strip -->
+            <Grid Grid.Row="1" ColumnDefinitions="*,*,*,*" Padding="4,4,4,0">
+                <Button Grid.Column="0" Text="Ch"
+                        Style="{StaticResource SidebarTabButton}"
+                        Command="{Binding SetSidebarModeCommand}"
+                        CommandParameter="Chapters"
+                        ToolTipProperties.Text="Chapters" />
+                <Button Grid.Column="1" Text="Cr"
+                        Style="{StaticResource SidebarTabButton}"
+                        Command="{Binding SetSidebarModeCommand}"
+                        CommandParameter="Characters"
+                        ToolTipProperties.Text="Characters" />
+                <Button Grid.Column="2" Text="Lc"
+                        Style="{StaticResource SidebarTabButton}"
+                        Command="{Binding SetSidebarModeCommand}"
+                        CommandParameter="Locations"
+                        ToolTipProperties.Text="Locations" />
+                <Button Grid.Column="3" Text="It"
+                        Style="{StaticResource SidebarTabButton}"
+                        Command="{Binding SetSidebarModeCommand}"
+                        CommandParameter="Items"
+                        ToolTipProperties.Text="Items" />
+            </Grid>
+
+            <!-- ── Chapters panel ── -->
+            <Grid Grid.Row="2" IsVisible="{Binding IsChaptersMode}" RowDefinitions="Auto,*,Auto">
+                <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Padding="0,4,4,0">
+                    <Label Grid.Column="0" Text="CHAPTERS" Style="{StaticResource PanelHeaderLabel}" />
+                    <Button Grid.Column="1" Text="+"
+                            Style="{StaticResource IconButton}"
+                            Command="{Binding AddChapterCommand}"
+                            IsEnabled="{Binding HasSelectedBook}"
+                            ToolTipProperties.Text="Add chapter" />
+                </Grid>
+                <CollectionView Grid.Row="1"
+                                ItemsSource="{Binding SelectedBook.Chapters}"
+                                SelectionMode="Single"
+                                SelectedItem="{Binding SelectedChapter}">
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="models:Chapter">
+                            <Grid ColumnDefinitions="Auto,*,Auto,Auto"
+                                  RowDefinitions="Auto,Auto,Auto"
+                                  BackgroundColor="Transparent"
+                                  Padding="0,1">
+                                <Grid.GestureRecognizers>
+                                    <TapGestureRecognizer
+                                        NumberOfTapsRequired="2"
+                                        Command="{Binding Source={x:Reference Page}, Path=BindingContext.RenameChapterCommand}"
+                                        CommandParameter="{Binding .}" />
+                                    <DropGestureRecognizer AllowDrop="True"
+                                        DragOver="OnChapterDragOver"
+                                        DragLeave="OnChapterDragLeave"
+                                        Drop="OnChapterDrop" />
+                                </Grid.GestureRecognizers>
+                                <BoxView Grid.Row="0" Grid.ColumnSpan="4"
+                                         HeightRequest="2" IsVisible="False"
+                                         BackgroundColor="{StaticResource AccentPrimary}" />
+                                <Label Grid.Row="1" Grid.Column="0"
+                                       Style="{StaticResource DragHandleLabel}">
+                                    <Label.GestureRecognizers>
+                                        <DragGestureRecognizer CanDrag="True"
+                                            DragStarting="OnChapterDragStarting"
+                                            DropCompleted="OnChapterDragCompleted" />
+                                    </Label.GestureRecognizers>
+                                </Label>
+                                <Label Grid.Row="1" Grid.Column="1"
+                                       Text="{Binding Title}"
+                                       Style="{StaticResource ListItemLabel}"
+                                       LineBreakMode="TailTruncation" />
+                                <Label Grid.Row="1" Grid.Column="2"
+                                       Text="{Binding WordCount, StringFormat='{0}w'}"
+                                       Style="{StaticResource WordCountLabel}" />
+                                <Button Grid.Row="1" Grid.Column="3" Text="×"
+                                        Style="{StaticResource DangerIconButton}"
+                                        Command="{Binding Source={x:Reference Page}, Path=BindingContext.DeleteChapterCommand}"
+                                        CommandParameter="{Binding .}" />
+                                <BoxView Grid.Row="2" Grid.ColumnSpan="4"
+                                         HeightRequest="2" IsVisible="False"
+                                         BackgroundColor="{StaticResource AccentPrimary}" />
+                            </Grid>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+                <!-- Book word count total -->
+                <Border Grid.Row="2"
+                        BackgroundColor="{StaticResource SurfaceDeep}"
+                        StrokeThickness="0"
+                        Padding="8,4">
+                    <Label Text="{Binding SelectedBook.WordCount, StringFormat='Book total: {0} words'}"
+                           Style="{StaticResource WordCountLabel}"
+                           HorizontalOptions="Center" />
+                </Border>
+            </Grid>
+
+            <!-- ── Characters panel ── -->
+            <Grid Grid.Row="2" IsVisible="{Binding IsCharactersMode}" RowDefinitions="Auto,*">
+                <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Padding="0,4,4,0">
+                    <Label Grid.Column="0" Text="CHARACTERS" Style="{StaticResource PanelHeaderLabel}" />
+                    <Button Grid.Column="1" Text="+"
+                            Style="{StaticResource IconButton}"
+                            Command="{Binding AddCharacterCommand}"
+                            IsEnabled="{Binding HasSelectedBook}"
+                            ToolTipProperties.Text="Add character" />
+                </Grid>
+                <CollectionView Grid.Row="1"
+                                ItemsSource="{Binding SelectedBook.Characters}"
+                                SelectionMode="Single"
+                                SelectedItem="{Binding SelectedCharacter}">
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="models:Character">
+                            <Grid ColumnDefinitions="*,Auto"
+                                  BackgroundColor="Transparent"
+                                  Padding="4,1">
+                                <Grid.GestureRecognizers>
+                                    <TapGestureRecognizer
+                                        NumberOfTapsRequired="2"
+                                        Command="{Binding Source={x:Reference Page}, Path=BindingContext.RenameCharacterCommand}"
+                                        CommandParameter="{Binding .}" />
+                                </Grid.GestureRecognizers>
+                                <Label Grid.Column="0"
+                                       Text="{Binding Name}"
+                                       Style="{StaticResource ListItemLabel}"
+                                       LineBreakMode="TailTruncation" />
+                                <Button Grid.Column="1" Text="×"
+                                        Style="{StaticResource DangerIconButton}"
+                                        Command="{Binding Source={x:Reference Page}, Path=BindingContext.DeleteCharacterCommand}"
+                                        CommandParameter="{Binding .}" />
+                            </Grid>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+            </Grid>
+
+            <!-- ── Locations panel ── -->
+            <Grid Grid.Row="2" IsVisible="{Binding IsLocationsMode}" RowDefinitions="Auto,*">
+                <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Padding="0,4,4,0">
+                    <Label Grid.Column="0" Text="LOCATIONS" Style="{StaticResource PanelHeaderLabel}" />
+                    <Button Grid.Column="1" Text="+"
+                            Style="{StaticResource IconButton}"
+                            Command="{Binding AddLocationCommand}"
+                            IsEnabled="{Binding HasSelectedBook}"
+                            ToolTipProperties.Text="Add location" />
+                </Grid>
+                <CollectionView Grid.Row="1"
+                                ItemsSource="{Binding SelectedBook.Locations}"
+                                SelectionMode="Single"
+                                SelectedItem="{Binding SelectedLocation}">
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="models:Location">
+                            <Grid ColumnDefinitions="*,Auto"
+                                  BackgroundColor="Transparent"
+                                  Padding="4,1">
+                                <Grid.GestureRecognizers>
+                                    <TapGestureRecognizer
+                                        NumberOfTapsRequired="2"
+                                        Command="{Binding Source={x:Reference Page}, Path=BindingContext.RenameLocationCommand}"
+                                        CommandParameter="{Binding .}" />
+                                </Grid.GestureRecognizers>
+                                <Label Grid.Column="0"
+                                       Text="{Binding Name}"
+                                       Style="{StaticResource ListItemLabel}"
+                                       LineBreakMode="TailTruncation" />
+                                <Button Grid.Column="1" Text="×"
+                                        Style="{StaticResource DangerIconButton}"
+                                        Command="{Binding Source={x:Reference Page}, Path=BindingContext.DeleteLocationCommand}"
+                                        CommandParameter="{Binding .}" />
+                            </Grid>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+            </Grid>
+
+            <!-- ── Items panel ── -->
+            <Grid Grid.Row="2" IsVisible="{Binding IsItemsMode}" RowDefinitions="Auto,*">
+                <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Padding="0,4,4,0">
+                    <Label Grid.Column="0" Text="ITEMS" Style="{StaticResource PanelHeaderLabel}" />
+                    <Button Grid.Column="1" Text="+"
+                            Style="{StaticResource IconButton}"
+                            Command="{Binding AddItemCommand}"
+                            IsEnabled="{Binding HasSelectedBook}"
+                            ToolTipProperties.Text="Add item" />
+                </Grid>
+                <CollectionView Grid.Row="1"
+                                ItemsSource="{Binding SelectedBook.Items}"
+                                SelectionMode="Single"
+                                SelectedItem="{Binding SelectedItem}">
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="models:Item">
+                            <Grid ColumnDefinitions="*,Auto"
+                                  BackgroundColor="Transparent"
+                                  Padding="4,1">
+                                <Grid.GestureRecognizers>
+                                    <TapGestureRecognizer
+                                        NumberOfTapsRequired="2"
+                                        Command="{Binding Source={x:Reference Page}, Path=BindingContext.RenameItemCommand}"
+                                        CommandParameter="{Binding .}" />
+                                </Grid.GestureRecognizers>
+                                <Label Grid.Column="0"
+                                       Text="{Binding Name}"
+                                       Style="{StaticResource ListItemLabel}"
+                                       LineBreakMode="TailTruncation" />
+                                <Button Grid.Column="1" Text="×"
+                                        Style="{StaticResource DangerIconButton}"
+                                        Command="{Binding Source={x:Reference Page}, Path=BindingContext.DeleteItemCommand}"
+                                        CommandParameter="{Binding .}" />
+                            </Grid>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+            </Grid>
+        </Grid>
+
+        <!-- Divider -->
+        <BoxView Grid.Column="1"
+                 Color="{StaticResource BorderSubtle}"
+                 IsVisible="{Binding IsSidebarVisible}" />
+
+        <!-- ── RIGHT PANEL: Editor (top) + Splitter + Scenes (bottom) ── -->
+        <Grid Grid.Column="2"
+              x:Name="EditorScenesGrid"
+              RowDefinitions="3*,Auto,*">
+
+            <!-- Scene editor area (visible when no story element is selected) -->
+            <Grid Grid.Row="0"
+                  IsVisible="{Binding IsSceneEditorVisible}"
+                  BackgroundColor="{StaticResource EditorBackground}"
+                  RowDefinitions="Auto,Auto,*">
+
+                <!-- Scene title entry -->
+                <Entry Grid.Row="0"
+                       Style="{StaticResource SceneTitleEntry}"
+                       Text="{Binding SelectedScene.Title}"
+                       Placeholder="Select a scene to begin writing..."
+                       IsEnabled="{Binding HasSelectedScene}"
+                       Unfocused="OnSceneTitleUnfocused" />
+
+                <!-- Formatting toolbar -->
+                <Grid Grid.Row="1"
+                      BackgroundColor="{StaticResource ToolbarBackground}"
+                      ColumnDefinitions="Auto,Auto,Auto,2,*,Auto"
+                      Padding="4,2">
+                    <Button Grid.Column="0" Text="B"
+                            Style="{StaticResource FormatButton}"
+                            FontAttributes="Bold"
+                            Clicked="OnBoldClicked"
+                            IsEnabled="{Binding HasSelectedScene}"
+                            ToolTipProperties.Text="Bold" />
+                    <Button Grid.Column="1" Text="I"
+                            Style="{StaticResource FormatButton}"
+                            FontAttributes="Italic"
+                            Clicked="OnItalicClicked"
+                            IsEnabled="{Binding HasSelectedScene}"
+                            ToolTipProperties.Text="Italic" />
+                    <Button Grid.Column="2" Text="U"
+                            Style="{StaticResource FormatButton}"
+                            IsEnabled="{Binding HasSelectedScene}"
+                            ToolTipProperties.Text="Underline" />
+                    <BoxView Grid.Column="3"
+                             Color="{StaticResource BorderSubtle}"
+                             VerticalOptions="Center"
+                             HeightRequest="16" />
+                    <Label Grid.Column="4"
+                           Text="{Binding WordCount, StringFormat='{0} words'}"
+                           Style="{StaticResource WordCountLabel}" />
+                    <Button Grid.Column="5" Text="≡"
+                            Style="{StaticResource IconButton}"
+                            Command="{Binding ToggleSidebarCommand}"
+                            ToolTipProperties.Text="Toggle sidebar" />
+                </Grid>
+
+                <!-- WebView rich text editor -->
+                <WebView Grid.Row="2"
+                         x:Name="EditorWebView"
+                         Source="editor.html"
+                         Navigating="OnEditorNavigating"
+                         Navigated="OnEditorNavigated"
+                         BackgroundColor="{StaticResource EditorBackground}" />
+            </Grid>
+
+            <!-- Element detail editor (visible when a character/location/item is selected) -->
+            <Grid Grid.Row="0"
+                  IsVisible="{Binding IsElementEditorVisible}"
+                  BackgroundColor="{StaticResource EditorBackground}"
+                  RowDefinitions="Auto,*">
+
+                <!-- Element editor toolbar -->
+                <Grid Grid.Row="0"
+                      BackgroundColor="{StaticResource ToolbarBackground}"
+                      ColumnDefinitions="*,Auto"
+                      Padding="4,2">
+                    <Label Grid.Column="0"
+                           Text="Story Element"
+                           Style="{StaticResource WordCountLabel}"
+                           VerticalOptions="Center" />
+                    <Button Grid.Column="1" Text="✕ Close"
+                            Style="{StaticResource IconButton}"
+                            Command="{Binding CloseElementEditorCommand}"
+                            ToolTipProperties.Text="Close and return to scene editor" />
+                </Grid>
+
+                <ScrollView Grid.Row="1">
+                <VerticalStackLayout Padding="16" Spacing="12">
+
+                    <!-- ── Character editor ── -->
+                    <VerticalStackLayout IsVisible="{Binding SelectedCharacter, Converter={StaticResource IsNotNullConverter}}"
+                                         Spacing="10">
+                        <Label Text="CHARACTER" Style="{StaticResource PanelHeaderLabel}" />
+
+                        <Label Text="Name" Style="{StaticResource FieldLabel}" />
+                        <Entry Text="{Binding SelectedCharacter.Name}"
+                               Style="{StaticResource ElementFieldEntry}"
+                               Placeholder="Character name"
+                               Unfocused="OnElementFieldUnfocused" />
+
+                        <Label Text="Full Name" Style="{StaticResource FieldLabel}" />
+                        <Entry Text="{Binding SelectedCharacter.FullName}"
+                               Style="{StaticResource ElementFieldEntry}"
+                               Placeholder="Full name"
+                               Unfocused="OnElementFieldUnfocused" />
+
+                        <Label Text="Description" Style="{StaticResource FieldLabel}" />
+                        <Editor Text="{Binding SelectedCharacter.Description}"
+                                Style="{StaticResource ElementFieldEditor}"
+                                Placeholder="Brief description"
+                                Unfocused="OnElementFieldUnfocused" />
+
+                        <Label Text="Bio" Style="{StaticResource FieldLabel}" />
+                        <Editor Text="{Binding SelectedCharacter.Bio}"
+                                Style="{StaticResource ElementFieldEditor}"
+                                HeightRequest="150"
+                                Placeholder="Character biography"
+                                Unfocused="OnElementFieldUnfocused" />
+
+                        <Label Text="Notes" Style="{StaticResource FieldLabel}" />
+                        <Editor Text="{Binding SelectedCharacter.Notes}"
+                                Style="{StaticResource ElementFieldEditor}"
+                                Placeholder="Additional notes"
+                                Unfocused="OnElementFieldUnfocused" />
+
+                        <Label Text="Image" Style="{StaticResource FieldLabel}" />
+                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto">
+                            <Image Grid.Column="0"
+                                   Source="{Binding SelectedCharacter.ImagePath, Converter={StaticResource ImagePathConverter}}"
+                                   HeightRequest="120" Aspect="AspectFit"
+                                   HorizontalOptions="Start" />
+                            <Button Grid.Column="1" Text="Browse..."
+                                    Style="{StaticResource IconButton}"
+                                    Command="{Binding PickCharacterImageCommand}"
+                                    VerticalOptions="Start"
+                                    ToolTipProperties.Text="Pick an image" />
+                        </Grid>
+                    </VerticalStackLayout>
+
+                    <!-- ── Location editor ── -->
+                    <VerticalStackLayout IsVisible="{Binding SelectedLocation, Converter={StaticResource IsNotNullConverter}}"
+                                         Spacing="10">
+                        <Label Text="LOCATION" Style="{StaticResource PanelHeaderLabel}" />
+
+                        <Label Text="Name" Style="{StaticResource FieldLabel}" />
+                        <Entry Text="{Binding SelectedLocation.Name}"
+                               Style="{StaticResource ElementFieldEntry}"
+                               Placeholder="Location name"
+                               Unfocused="OnElementFieldUnfocused" />
+
+                        <Label Text="Description" Style="{StaticResource FieldLabel}" />
+                        <Editor Text="{Binding SelectedLocation.Description}"
+                                Style="{StaticResource ElementFieldEditor}"
+                                Placeholder="Brief description"
+                                Unfocused="OnElementFieldUnfocused" />
+
+                        <Label Text="Notes" Style="{StaticResource FieldLabel}" />
+                        <Editor Text="{Binding SelectedLocation.Notes}"
+                                Style="{StaticResource ElementFieldEditor}"
+                                Placeholder="Additional notes"
+                                Unfocused="OnElementFieldUnfocused" />
+
+                        <Label Text="Image" Style="{StaticResource FieldLabel}" />
+                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto">
+                            <Image Grid.Column="0"
+                                   Source="{Binding SelectedLocation.ImagePath, Converter={StaticResource ImagePathConverter}}"
+                                   HeightRequest="120" Aspect="AspectFit"
+                                   HorizontalOptions="Start" />
+                            <Button Grid.Column="1" Text="Browse..."
+                                    Style="{StaticResource IconButton}"
+                                    Command="{Binding PickLocationImageCommand}"
+                                    VerticalOptions="Start"
+                                    ToolTipProperties.Text="Pick an image" />
+                        </Grid>
+                    </VerticalStackLayout>
+
+                    <!-- ── Item editor ── -->
+                    <VerticalStackLayout IsVisible="{Binding SelectedItem, Converter={StaticResource IsNotNullConverter}}"
+                                         Spacing="10">
+                        <Label Text="ITEM" Style="{StaticResource PanelHeaderLabel}" />
+
+                        <Label Text="Name" Style="{StaticResource FieldLabel}" />
+                        <Entry Text="{Binding SelectedItem.Name}"
+                               Style="{StaticResource ElementFieldEntry}"
+                               Placeholder="Item name"
+                               Unfocused="OnElementFieldUnfocused" />
+
+                        <Label Text="Description" Style="{StaticResource FieldLabel}" />
+                        <Editor Text="{Binding SelectedItem.Description}"
+                                Style="{StaticResource ElementFieldEditor}"
+                                Placeholder="Brief description"
+                                Unfocused="OnElementFieldUnfocused" />
+
+                        <Label Text="Notes" Style="{StaticResource FieldLabel}" />
+                        <Editor Text="{Binding SelectedItem.Notes}"
+                                Style="{StaticResource ElementFieldEditor}"
+                                Placeholder="Additional notes"
+                                Unfocused="OnElementFieldUnfocused" />
+                    </VerticalStackLayout>
+
+                </VerticalStackLayout>
+                </ScrollView>
+            </Grid>
+
+            <!-- Resizable splitter grip -->
+            <BoxView Grid.Row="1"
+                     IsVisible="{Binding IsSceneEditorVisible}"
+                     HeightRequest="6"
+                     Color="{StaticResource BorderMedium}">
+                <BoxView.GestureRecognizers>
+                    <PanGestureRecognizer PanUpdated="OnSplitterPanUpdated" />
+                </BoxView.GestureRecognizers>
+            </BoxView>
+
+            <!-- Scenes panel -->
+            <Grid Grid.Row="2"
+                  IsVisible="{Binding IsSceneEditorVisible}"
+                  BackgroundColor="{StaticResource SurfaceMid}"
+                  RowDefinitions="Auto,*">
+                <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Padding="0,4,4,0">
+                    <Label Grid.Column="0" Text="SCENES" Style="{StaticResource PanelHeaderLabel}" />
+                    <Button Grid.Column="1" Text="+"
+                            Style="{StaticResource IconButton}"
+                            Command="{Binding AddSceneCommand}"
+                            IsEnabled="{Binding HasSelectedChapter}"
+                            ToolTipProperties.Text="Add scene" />
+                </Grid>
+                <CollectionView Grid.Row="1"
+                                ItemsSource="{Binding SelectedChapter.Scenes}"
+                                SelectionMode="Single"
+                                SelectedItem="{Binding SelectedScene}">
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="models:Scene">
+                            <Grid ColumnDefinitions="Auto,*,Auto,Auto"
+                                  RowDefinitions="Auto,Auto,Auto"
+                                  BackgroundColor="Transparent"
+                                  Padding="0,1">
+                                <Grid.GestureRecognizers>
+                                    <TapGestureRecognizer
+                                        NumberOfTapsRequired="2"
+                                        Command="{Binding Source={x:Reference Page}, Path=BindingContext.RenameSceneCommand}"
+                                        CommandParameter="{Binding .}" />
+                                    <DropGestureRecognizer AllowDrop="True"
+                                        DragOver="OnSceneDragOver"
+                                        DragLeave="OnSceneDragLeave"
+                                        Drop="OnSceneDrop" />
+                                </Grid.GestureRecognizers>
+                                <BoxView Grid.Row="0" Grid.ColumnSpan="4"
+                                         HeightRequest="2" IsVisible="False"
+                                         BackgroundColor="{StaticResource AccentPrimary}" />
+                                <Label Grid.Row="1" Grid.Column="0"
+                                       Style="{StaticResource DragHandleLabel}">
+                                    <Label.GestureRecognizers>
+                                        <DragGestureRecognizer CanDrag="True"
+                                            DragStarting="OnSceneDragStarting"
+                                            DropCompleted="OnSceneDragCompleted" />
+                                    </Label.GestureRecognizers>
+                                </Label>
+                                <Label Grid.Row="1" Grid.Column="1"
+                                       Text="{Binding Title}"
+                                       Style="{StaticResource ListItemLabel}"
+                                       LineBreakMode="TailTruncation" />
+                                <Label Grid.Row="1" Grid.Column="2"
+                                       Text="{Binding WordCount, StringFormat='{0}w'}"
+                                       Style="{StaticResource WordCountLabel}" />
+                                <Button Grid.Row="1" Grid.Column="3" Text="×"
+                                        Style="{StaticResource DangerIconButton}"
+                                        Command="{Binding Source={x:Reference Page}, Path=BindingContext.DeleteSceneCommand}"
+                                        CommandParameter="{Binding .}" />
+                                <BoxView Grid.Row="2" Grid.ColumnSpan="4"
+                                         HeightRequest="2" IsVisible="False"
+                                         BackgroundColor="{StaticResource AccentPrimary}" />
+                            </Grid>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+            </Grid>
+        </Grid>
+    </Grid>
+</ContentPage>

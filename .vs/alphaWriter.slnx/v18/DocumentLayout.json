@@ -1,0 +1,57 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\fmExtreme\\source\\repos\\alphaWriter\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{2F9A9C5A-EF92-BAF3-35A9-C1815565C4A8}|alphaWriter\\alphaWriter.csproj|c:\\users\\fmextreme\\source\\repos\\alphawriter\\alphawriter\\views\\writerpage.xaml.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{2F9A9C5A-EF92-BAF3-35A9-C1815565C4A8}|alphaWriter\\alphaWriter.csproj|solutionrelative:alphawriter\\views\\writerpage.xaml.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{2F9A9C5A-EF92-BAF3-35A9-C1815565C4A8}|alphaWriter\\alphaWriter.csproj|c:\\users\\fmextreme\\source\\repos\\alphawriter\\alphawriter\\models\\scene.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{2F9A9C5A-EF92-BAF3-35A9-C1815565C4A8}|alphaWriter\\alphaWriter.csproj|solutionrelative:alphawriter\\models\\scene.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 1,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{aa2115a1-9712-457b-9047-dbb71ca2cdd2}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "WriterPage.xaml.cs",
+              "DocumentMoniker": "C:\\Users\\fmExtreme\\source\\repos\\alphaWriter\\alphaWriter\\Views\\WriterPage.xaml.cs",
+              "RelativeDocumentMoniker": "alphaWriter\\Views\\WriterPage.xaml.cs",
+              "ToolTip": "C:\\Users\\fmExtreme\\source\\repos\\alphaWriter\\alphaWriter\\Views\\WriterPage.xaml.cs",
+              "RelativeToolTip": "alphaWriter\\Views\\WriterPage.xaml.cs",
+              "ViewState": "AgIAAGIBAAAAAAAAAAAiwGsBAAAyAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-03-20T23:34:22.71Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "Scene.cs",
+              "DocumentMoniker": "C:\\Users\\fmExtreme\\source\\repos\\alphaWriter\\alphaWriter\\Models\\Scene.cs",
+              "RelativeDocumentMoniker": "alphaWriter\\Models\\Scene.cs",
+              "ToolTip": "C:\\Users\\fmExtreme\\source\\repos\\alphaWriter\\alphaWriter\\Models\\Scene.cs",
+              "RelativeToolTip": "alphaWriter\\Models\\Scene.cs",
+              "ViewState": "AgIAAE0AAAAAAAAAAAAmwAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-03-20T23:33:46.866Z"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

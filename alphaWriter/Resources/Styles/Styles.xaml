@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
+
+    <!-- Page background -->
+    <Style TargetType="ContentPage">
+        <Setter Property="BackgroundColor" Value="{StaticResource SurfaceDeep}" />
+    </Style>
+
+    <!-- Panel header labels (e.g., "BOOKS", "CHAPTERS") -->
+    <Style x:Key="PanelHeaderLabel" TargetType="Label">
+        <Setter Property="TextColor" Value="{StaticResource TextSecondary}" />
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="Margin" Value="8,8,8,4" />
+        <Setter Property="CharacterSpacing" Value="1.5" />
+        <Setter Property="VerticalOptions" Value="Center" />
+    </Style>
+
+    <!-- Drag-and-drop handle (≡) in list items -->
+    <Style x:Key="DragHandleLabel" TargetType="Label">
+        <Setter Property="Text" Value="≡" />
+        <Setter Property="TextColor" Value="{StaticResource TextDisabled}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="VerticalOptions" Value="Center" />
+        <Setter Property="HorizontalOptions" Value="Center" />
+        <Setter Property="WidthRequest" Value="22" />
+        <Setter Property="Margin" Value="10,0,0,0" />
+    </Style>
+
+    <!-- List item title labels -->
+    <Style x:Key="ListItemLabel" TargetType="Label">
+        <Setter Property="TextColor" Value="{StaticResource TextPrimary}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="VerticalOptions" Value="Center" />
+        <Setter Property="Margin" Value="8,0,4,0" />
+    </Style>
+
+    <!-- Small icon button (+ and × in panels) -->
+    <Style x:Key="IconButton" TargetType="Button">
+        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="TextColor" Value="{StaticResource TextSecondary}" />
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="Padding" Value="6,2" />
+        <Setter Property="Margin" Value="2" />
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="MinimumHeightRequest" Value="28" />
+        <Setter Property="MinimumWidthRequest" Value="28" />
+        <Setter Property="BorderWidth" Value="0" />
+    </Style>
+
+    <!-- Danger icon button (delete) -->
+    <Style x:Key="DangerIconButton" TargetType="Button" BasedOn="{StaticResource IconButton}">
+        <Setter Property="TextColor" Value="{StaticResource AccentDanger}" />
+    </Style>
+
+    <!-- Formatting toolbar buttons (B, I, U) -->
+    <Style x:Key="FormatButton" TargetType="Button">
+        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="TextColor" Value="{StaticResource TextSecondary}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="Padding" Value="8,4" />
+        <Setter Property="MinimumWidthRequest" Value="32" />
+        <Setter Property="MinimumHeightRequest" Value="28" />
+        <Setter Property="BorderWidth" Value="0" />
+        <Setter Property="Margin" Value="2,0" />
+    </Style>
+
+    <!-- Word count label -->
+    <Style x:Key="WordCountLabel" TargetType="Label">
+        <Setter Property="TextColor" Value="{StaticResource WordCountText}" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="VerticalOptions" Value="Center" />
+        <Setter Property="Margin" Value="8,0" />
+    </Style>
+
+    <!-- Book selector button in chapters header -->
+    <Style x:Key="BookSelectorButton" TargetType="Button">
+        <Setter Property="BackgroundColor" Value="{StaticResource SurfaceRaised}" />
+        <Setter Property="TextColor" Value="{StaticResource TextAccent}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="Padding" Value="8,4" />
+        <Setter Property="Margin" Value="4,4,0,0" />
+        <Setter Property="HorizontalOptions" Value="Fill" />
+        <Setter Property="BorderWidth" Value="1" />
+        <Setter Property="BorderColor" Value="{StaticResource BorderSubtle}" />
+    </Style>
+
+    <!-- Scene title entry in editor header -->
+    <Style x:Key="SceneTitleEntry" TargetType="Entry">
+        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="TextColor" Value="{StaticResource TextPrimary}" />
+        <Setter Property="PlaceholderColor" Value="{StaticResource TextDisabled}" />
+        <Setter Property="FontSize" Value="18" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="Margin" Value="8,4" />
+    </Style>
+
+    <!-- Sidebar tab button for switching between Chapters/Characters/Locations/Items -->
+    <Style x:Key="SidebarTabButton" TargetType="Button">
+        <Setter Property="BackgroundColor" Value="{StaticResource SurfaceRaised}" />
+        <Setter Property="TextColor" Value="{StaticResource TextSecondary}" />
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="Padding" Value="4,4" />
+        <Setter Property="Margin" Value="1" />
+        <Setter Property="MinimumHeightRequest" Value="28" />
+        <Setter Property="BorderWidth" Value="0" />
+        <Setter Property="HorizontalOptions" Value="Fill" />
+    </Style>
+
+    <!-- Field label in element detail editor -->
+    <Style x:Key="FieldLabel" TargetType="Label">
+        <Setter Property="TextColor" Value="{StaticResource TextSecondary}" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="Margin" Value="0,4,0,2" />
+    </Style>
+
+    <!-- Single-line entry in element detail editor -->
+    <Style x:Key="ElementFieldEntry" TargetType="Entry">
+        <Setter Property="BackgroundColor" Value="{StaticResource SurfaceRaised}" />
+        <Setter Property="TextColor" Value="{StaticResource TextPrimary}" />
+        <Setter Property="PlaceholderColor" Value="{StaticResource TextDisabled}" />
+        <Setter Property="FontSize" Value="14" />
+    </Style>
+
+    <!-- Multi-line editor in element detail editor -->
+    <Style x:Key="ElementFieldEditor" TargetType="Editor">
+        <Setter Property="BackgroundColor" Value="{StaticResource SurfaceRaised}" />
+        <Setter Property="TextColor" Value="{StaticResource TextPrimary}" />
+        <Setter Property="PlaceholderColor" Value="{StaticResource TextDisabled}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="HeightRequest" Value="80" />
+        <Setter Property="AutoSize" Value="TextChanges" />
+    </Style>
+
+</ResourceDictionary>

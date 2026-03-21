@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background-color: #1E1E28;
+    color: #E8E4DC;
+    font-family: 'Georgia', 'Times New Roman', serif;
+    font-size: 16px;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  #editor {
+    flex: 1;
+    padding: 24px 48px;
+    outline: none;
+    overflow-y: auto;
+    line-height: 1.8;
+    caret-color: #A89EC9;
+    word-spacing: 0.05em;
+  }
+
+  ::selection {
+    background-color: #3D3D55;
+    color: #E8E4DC;
+  }
+
+  #editor p { margin-bottom: 0.6em; }
+  #editor p:first-child { margin-top: 0; }
+
+  #editor:empty::before {
+    content: attr(data-placeholder);
+    color: #5A5A6A;
+    pointer-events: none;
+    display: block;
+  }
+
+  #editor::-webkit-scrollbar { width: 6px; }
+  #editor::-webkit-scrollbar-track { background: #1E1E28; }
+  #editor::-webkit-scrollbar-thumb { background: #3A3A48; border-radius: 3px; }
+
+  .comment {
+    color: #5A5A6A;
+    font-style: italic;
+  }
+</style>
+</head>
+<body>
+  <div id="editor"
+       contenteditable="true"
+       spellcheck="true"
+       data-placeholder="Start writing...">
+  </div>
+
+<script>
+  var _ready = false;
+  var _notifyTimer = null;
+  var _highlightTimer = null;
+
+  // Raw content cache — captured before any DOM modification.
+  // getContent() returns this so C# always gets a stable value.
+  var _rawContent = '';
+  var _wordCount = 0;
+
+  // ── Content API ─────────────────────────────────────────────────────────────
+
+  function setContent(rawHtml) {
+    // Cancel any pending timers from the previous scene to prevent stale
+    // notifications from overwriting content on the wrong scene.
+    clearTimeout(_notifyTimer);
+    clearTimeout(_highlightTimer);
+    _rawContent = rawHtml || '';
+    _wordCount = computeWordCount(_rawContent);
+    document.getElementById('editor').innerHTML = applyCommentHighlighting(_rawContent);
+    _ready = true;
+  }
+
+  // Immediately captures the current editor DOM content into _rawContent,
+  // cancels pending timers, and updates _wordCount. Called by C# before
+  // switching scenes so that the outgoing scene's content is not lost.
+  function flushContent() {
+    clearTimeout(_notifyTimer);
+    clearTimeout(_highlightTimer);
+    _rawContent = stripCommentSpans(document.getElementById('editor').innerHTML);
+    _wordCount = computeWordCount(_rawContent);
+  }
+
+  function getContent() {
+    return _rawContent;
+  }
+
+  function computeWordCount(rawHtml) {
+    var text = rawHtml;
+    // Block-level tags → newline so // comments terminate at line breaks
+    text = text.replace(/<br\s*\/?>/gi, '\n');
+    text = text.replace(/<\/?(div|p|li|tr|h[1-6]|ul|ol|blockquote)[^>]*>/gi, '\n');
+    // Strip remaining tags
+    text = text.replace(/<[^>]*>/g, '');
+    // Decode common entities
+    text = text.replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&')
+               .replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&quot;/gi, '"');
+    // Strip block then line comments
+    text = text.replace(/\/\*[\s\S]*?\*\//g, '');
+    text = text.replace(/\/\/[^\n]*/g, '');
+    return text.trim().split(/\s+/).filter(function(w) { return w.length > 0; }).length;
+  }
+
+  function getWordCount() {
+    return _wordCount;
+  }
+
+  // ── Comment highlighting ─────────────────────────────────────────────────────
+  // Walks the HTML string, passing tags through unchanged.
+  // Wraps // and /* */ patterns in <span class="comment">.
+  // Block-level elements (div, p, br) terminate line comments.
+  // Block comments persist through all elements (span is re-opened after each tag).
+
+  function applyCommentHighlighting(html) {
+    var result = '';
+    var i = 0;
+    var inLine = false;
+    var inBlock = false;
+
+    function openSpan()  { result += '<span class="comment">'; }
+    function closeSpan() { result += '</span>'; inLine = false; inBlock = false; }
+
+    while (i < html.length) {
+
+      // ── HTML tag ─────────────────────────────────────────────────────────────
+      if (html[i] === '<') {
+        var end = html.indexOf('>', i);
+        if (end === -1) { result += html.slice(i); break; }
+        var tag = html.slice(i, end + 1);
+        var isBlock = /^<(br|div|\/div|p|\/p|li|\/li)/i.test(tag);
+
+        var wasBlock = inBlock;
+        var wasLine  = inLine;
+
+        // Close any active span before the tag (required for valid HTML)
+        if (wasBlock || wasLine) closeSpan();
+        result += tag;
+
+        // Reopen block comment after every tag (it continues through all markup)
+        if (wasBlock) { openSpan(); inBlock = true; }
+        // Line comment: continue through inline tags, terminate at block elements
+        else if (wasLine && !isBlock) { openSpan(); inLine = true; }
+        // wasLine && isBlock → line comment terminated, do not reopen
+
+        i = end + 1;
+        continue;
+      }
+
+      // ── HTML entity — pass through intact ────────────────────────────────────
+      if (html[i] === '&') {
+        var semi = html.indexOf(';', i);
+        if (semi !== -1 && semi - i <= 8) {
+          result += html.slice(i, semi + 1);
+          i = semi + 1;
+          continue;
+        }
+      }
+
+      // ── Block comment end: */ ─────────────────────────────────────────────────
+      if (inBlock && i + 1 < html.length && html[i] === '*' && html[i + 1] === '/') {
+        result += '*/';
+        closeSpan();
+        i += 2;
+        continue;
+      }
+
+      // ── Block comment start: /* ───────────────────────────────────────────────
+      if (!inLine && !inBlock && i + 1 < html.length && html[i] === '/' && html[i + 1] === '*') {
+        openSpan(); inBlock = true;
+        result += '/*';
+        i += 2;
+        continue;
+      }
+
+      // ── Line comment start: // ────────────────────────────────────────────────
+      if (!inLine && !inBlock && i + 1 < html.length && html[i] === '/' && html[i + 1] === '/') {
+        openSpan(); inLine = true;
+        result += '//';
+        i += 2;
+        continue;
+      }
+
+      // ── Newline — terminates line comment ─────────────────────────────────────
+      if (inLine && html[i] === '\n') {
+        closeSpan();
+        result += '\n';
+        i++;
+        continue;
+      }
+
+      result += html[i];
+      i++;
+    }
+
+    if (inLine || inBlock) closeSpan();
+    return result;
+  }
+
+  // Removes <span class="comment">…</span> wrappers, keeping inner text/markup.
+  function stripCommentSpans(html) {
+    return html.replace(/<span class="comment">([\s\S]*?)<\/span>/gi, '$1');
+  }
+
+  // ── Cursor save / restore ────────────────────────────────────────────────────
+  // Block elements (div, p, br, li) each contribute +1 to the offset so that
+  // "cursor at end of line N" and "cursor at start of empty line N+1" always
+  // produce distinct offsets and survive an innerHTML replacement.
+
+  var _BLOCK = /^(BR|DIV|P|LI|H1|H2|H3|H4|H5|H6|UL|OL|BLOCKQUOTE)$/;
+  function _isBlock(node) { return node.nodeType === 1 && _BLOCK.test(node.nodeName); }
+
+  function getCaretOffset(el) {
+    var sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return 0;
+    var range   = sel.getRangeAt(0);
+    var endNode = range.endContainer;
+    var endOff  = range.endOffset;
+    var count   = 0;
+    var found   = false;
+
+    // Count all text + block entries in a subtree (no early-exit needed).
+    function countSubtree(node) {
+      if (node.nodeType === 3) { count += node.length; return; }
+      if (node !== el && _isBlock(node)) count++;
+      for (var i = 0; i < node.childNodes.length; i++) countSubtree(node.childNodes[i]);
+    }
+
+    function walk(node) {
+      if (found) return;
+      // Block elements (except root) add 1 to the running offset.
+      if (node !== el && _isBlock(node)) count++;
+      // Have we arrived at the cursor's container?
+      if (node === endNode) {
+        if (node.nodeType === 3) {
+          count += endOff;
+        } else {
+          // Element node: count block children that come before endOff.
+          for (var k = 0; k < endOff && k < node.childNodes.length; k++) {
+            countSubtree(node.childNodes[k]);
+          }
+        }
+        found = true;
+        return;
+      }
+      if (node.nodeType === 3) { count += node.length; return; }
+      for (var i = 0; i < node.childNodes.length; i++) {
+        walk(node.childNodes[i]);
+        if (found) return;
+      }
+    }
+
+    walk(el);
+    return count;
+  }
+
+  function setCaretOffset(el, offset) {
+    var range = document.createRange();
+    var sel   = window.getSelection();
+    var count = 0;
+    var found = false;
+
+    function place(node, off) {
+      try { range.setStart(node, off); range.collapse(true); found = true; } catch(e) {}
+    }
+
+    function walk(node) {
+      if (found) return;
+      if (node !== el && _isBlock(node)) {
+        count++;
+        // If the offset lands exactly at the start of this block, place cursor here.
+        if (count === offset) { place(node, 0); return; }
+      }
+      if (node.nodeType === 3) {
+        var len = node.length;
+        if (count + len >= offset) { place(node, offset - count); }
+        else { count += len; }
+        return;
+      }
+      for (var i = 0; i < node.childNodes.length; i++) {
+        walk(node.childNodes[i]);
+        if (found) return;
+      }
+    }
+
+    walk(el);
+    if (!found) {
+      // Fallback: move to end of editor content.
+      try { range.setStart(el, el.childNodes.length); range.collapse(true); found = true; } catch(e) {}
+    }
+    if (found && sel) { sel.removeAllRanges(); sel.addRange(range); }
+  }
+
+  // ── Re-highlight in place (preserves cursor position) ───────────────────────
+
+  function refreshHighlighting() {
+    var editor = document.getElementById('editor');
+    var pos = getCaretOffset(editor);
+    var raw = stripCommentSpans(editor.innerHTML);
+    editor.innerHTML = applyCommentHighlighting(raw);
+    setCaretOffset(editor, pos);
+  }
+
+  // ── Formatting commands ──────────────────────────────────────────────────────
+
+  function execFormat(command) {
+    document.execCommand(command, false, null);
+    document.getElementById('editor').focus();
+    scheduleNotify();
+  }
+
+  // ── Change notification ──────────────────────────────────────────────────────
+  // Notification and highlighting run on separate timers so the DOM is not
+  // modified before C# reads the content via getContent().
+  //
+  // IMPORTANT: the URL includes a unique timestamp so WebView2 treats each call
+  // as a new navigation. Without this, WebView2 ignores repeated navigations to
+  // the same URL and C# never receives subsequent saves.
+
+  function scheduleNotify() {
+    clearTimeout(_notifyTimer);
+    clearTimeout(_highlightTimer);
+
+    _notifyTimer = setTimeout(function() {
+      // Capture raw content BEFORE any DOM modification
+      _rawContent = stripCommentSpans(document.getElementById('editor').innerHTML);
+      _wordCount = computeWordCount(_rawContent);
+      // Notify C# — unique URL forces a fresh Navigating event every time
+      window.location.href = 'alphawriter://contentChanged?t=' + Date.now();
+      // Apply visual highlighting shortly after (non-blocking for C# retrieval)
+      _highlightTimer = setTimeout(refreshHighlighting, 50);
+    }, 800);
+  }
+
+  document.getElementById('editor').addEventListener('input', scheduleNotify);
+
+  // Paste as plain text only
+  document.getElementById('editor').addEventListener('paste', function(e) {
+    e.preventDefault();
+    var text = (e.clipboardData || window.clipboardData).getData('text/plain');
+    document.execCommand('insertText', false, text);
+  });
+</script>
+</body>
+</html>

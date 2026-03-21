@@ -1,0 +1,329 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>alphaWriter</name>
+    </assembly>
+    <members>
+        <member name="T:alphaWriter.ViewModels.WriterViewModel">
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.Books">
+            <inheritdoc cref="F:alphaWriter.ViewModels.WriterViewModel.books"/>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.SelectedBook">
+            <inheritdoc cref="F:alphaWriter.ViewModels.WriterViewModel.selectedBook"/>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.SelectedChapter">
+            <inheritdoc cref="F:alphaWriter.ViewModels.WriterViewModel.selectedChapter"/>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.SelectedScene">
+            <inheritdoc cref="F:alphaWriter.ViewModels.WriterViewModel.selectedScene"/>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.WordCount">
+            <inheritdoc cref="F:alphaWriter.ViewModels.WriterViewModel.wordCount"/>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.IsSidebarVisible">
+            <inheritdoc cref="F:alphaWriter.ViewModels.WriterViewModel.isSidebarVisible"/>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.SidebarMode">
+            <inheritdoc cref="F:alphaWriter.ViewModels.WriterViewModel.sidebarMode"/>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.SelectedCharacter">
+            <inheritdoc cref="F:alphaWriter.ViewModels.WriterViewModel.selectedCharacter"/>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.SelectedLocation">
+            <inheritdoc cref="F:alphaWriter.ViewModels.WriterViewModel.selectedLocation"/>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.SelectedItem">
+            <inheritdoc cref="F:alphaWriter.ViewModels.WriterViewModel.selectedItem"/>
+        </member>
+        <member name="M:alphaWriter.ViewModels.WriterViewModel.OnSelectedBookChanged(alphaWriter.Models.Book)">
+            <summary>Executes the logic for when <see cref="P:alphaWriter.ViewModels.WriterViewModel.SelectedBook"/> just changed.</summary>
+            <param name="value">The new property value that was set.</param>
+            <remarks>This method is invoked right after the value of <see cref="P:alphaWriter.ViewModels.WriterViewModel.SelectedBook"/> is changed.</remarks>
+        </member>
+        <member name="M:alphaWriter.ViewModels.WriterViewModel.OnSelectedChapterChanged(alphaWriter.Models.Chapter)">
+            <summary>Executes the logic for when <see cref="P:alphaWriter.ViewModels.WriterViewModel.SelectedChapter"/> just changed.</summary>
+            <param name="value">The new property value that was set.</param>
+            <remarks>This method is invoked right after the value of <see cref="P:alphaWriter.ViewModels.WriterViewModel.SelectedChapter"/> is changed.</remarks>
+        </member>
+        <member name="M:alphaWriter.ViewModels.WriterViewModel.OnSelectedSceneChanged(alphaWriter.Models.Scene)">
+            <summary>Executes the logic for when <see cref="P:alphaWriter.ViewModels.WriterViewModel.SelectedScene"/> just changed.</summary>
+            <param name="value">The new property value that was set.</param>
+            <remarks>This method is invoked right after the value of <see cref="P:alphaWriter.ViewModels.WriterViewModel.SelectedScene"/> is changed.</remarks>
+        </member>
+        <member name="M:alphaWriter.ViewModels.WriterViewModel.OnSidebarModeChanged(alphaWriter.ViewModels.SidebarMode)">
+            <summary>Executes the logic for when <see cref="P:alphaWriter.ViewModels.WriterViewModel.SidebarMode"/> just changed.</summary>
+            <param name="value">The new property value that was set.</param>
+            <remarks>This method is invoked right after the value of <see cref="P:alphaWriter.ViewModels.WriterViewModel.SidebarMode"/> is changed.</remarks>
+        </member>
+        <member name="M:alphaWriter.ViewModels.WriterViewModel.OnSelectedCharacterChanged(alphaWriter.Models.Character)">
+            <summary>Executes the logic for when <see cref="P:alphaWriter.ViewModels.WriterViewModel.SelectedCharacter"/> just changed.</summary>
+            <param name="value">The new property value that was set.</param>
+            <remarks>This method is invoked right after the value of <see cref="P:alphaWriter.ViewModels.WriterViewModel.SelectedCharacter"/> is changed.</remarks>
+        </member>
+        <member name="M:alphaWriter.ViewModels.WriterViewModel.OnSelectedLocationChanged(alphaWriter.Models.Location)">
+            <summary>Executes the logic for when <see cref="P:alphaWriter.ViewModels.WriterViewModel.SelectedLocation"/> just changed.</summary>
+            <param name="value">The new property value that was set.</param>
+            <remarks>This method is invoked right after the value of <see cref="P:alphaWriter.ViewModels.WriterViewModel.SelectedLocation"/> is changed.</remarks>
+        </member>
+        <member name="M:alphaWriter.ViewModels.WriterViewModel.OnSelectedItemChanged(alphaWriter.Models.Item)">
+            <summary>Executes the logic for when <see cref="P:alphaWriter.ViewModels.WriterViewModel.SelectedItem"/> just changed.</summary>
+            <param name="value">The new property value that was set.</param>
+            <remarks>This method is invoked right after the value of <see cref="P:alphaWriter.ViewModels.WriterViewModel.SelectedItem"/> is changed.</remarks>
+        </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.addBookCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.AddBookCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.AddBookCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IAsyncRelayCommand"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.AddBook"/>.</summary>
+        </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.deleteBookCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.DeleteBookCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.DeleteBookCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IAsyncRelayCommand`1"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.DeleteBook(alphaWriter.Models.Book)"/>.</summary>
+        </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.renameBookCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.RenameBookCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.RenameBookCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IAsyncRelayCommand`1"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.RenameBook(alphaWriter.Models.Book)"/>.</summary>
+        </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.switchBookCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.SwitchBookCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.SwitchBookCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IAsyncRelayCommand"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.SwitchBook"/>.</summary>
+        </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.manageBooksCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.ManageBooksCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.ManageBooksCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IAsyncRelayCommand"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.ManageBooks"/>.</summary>
+        </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.addChapterCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.AddChapterCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.AddChapterCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IAsyncRelayCommand"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.AddChapter"/>.</summary>
+        </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.deleteChapterCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.DeleteChapterCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.DeleteChapterCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IAsyncRelayCommand`1"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.DeleteChapter(alphaWriter.Models.Chapter)"/>.</summary>
+        </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.renameChapterCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.RenameChapterCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.RenameChapterCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IAsyncRelayCommand`1"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.RenameChapter(alphaWriter.Models.Chapter)"/>.</summary>
+        </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.addSceneCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.AddSceneCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.AddSceneCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IAsyncRelayCommand"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.AddScene"/>.</summary>
+        </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.deleteSceneCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.DeleteSceneCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.DeleteSceneCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IAsyncRelayCommand`1"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.DeleteScene(alphaWriter.Models.Scene)"/>.</summary>
+        </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.renameSceneCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.RenameSceneCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.RenameSceneCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IAsyncRelayCommand`1"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.RenameScene(alphaWriter.Models.Scene)"/>.</summary>
+        </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.toggleSidebarCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.ToggleSidebarCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.ToggleSidebarCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IRelayCommand"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.ToggleSidebar"/>.</summary>
+        </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.closeElementEditorCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.CloseElementEditorCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.CloseElementEditorCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IRelayCommand"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.CloseElementEditor"/>.</summary>
+        </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.setSidebarModeCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.SetSidebarModeCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.SetSidebarModeCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IRelayCommand`1"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.SetSidebarMode(System.String)"/>.</summary>
+        </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.addCharacterCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.AddCharacterCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.AddCharacterCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IAsyncRelayCommand"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.AddCharacter"/>.</summary>
+        </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.deleteCharacterCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.DeleteCharacterCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.DeleteCharacterCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IAsyncRelayCommand`1"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.DeleteCharacter(alphaWriter.Models.Character)"/>.</summary>
+        </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.renameCharacterCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.RenameCharacterCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.RenameCharacterCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IAsyncRelayCommand`1"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.RenameCharacter(alphaWriter.Models.Character)"/>.</summary>
+        </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.pickCharacterImageCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.PickCharacterImageCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.PickCharacterImageCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IAsyncRelayCommand"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.PickCharacterImage"/>.</summary>
+        </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.addLocationCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.AddLocationCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.AddLocationCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IAsyncRelayCommand"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.AddLocation"/>.</summary>
+        </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.deleteLocationCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.DeleteLocationCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.DeleteLocationCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IAsyncRelayCommand`1"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.DeleteLocation(alphaWriter.Models.Location)"/>.</summary>
+        </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.renameLocationCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.RenameLocationCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.RenameLocationCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IAsyncRelayCommand`1"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.RenameLocation(alphaWriter.Models.Location)"/>.</summary>
+        </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.pickLocationImageCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.PickLocationImageCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.PickLocationImageCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IAsyncRelayCommand"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.PickLocationImage"/>.</summary>
+        </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.addItemCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.AddItemCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.AddItemCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IAsyncRelayCommand"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.AddItem"/>.</summary>
+        </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.deleteItemCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.DeleteItemCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.DeleteItemCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IAsyncRelayCommand`1"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.DeleteItem(alphaWriter.Models.Item)"/>.</summary>
+        </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.renameItemCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.RenameItemCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.RenameItemCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IAsyncRelayCommand`1"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.RenameItem(alphaWriter.Models.Item)"/>.</summary>
+        </member>
+        <member name="T:alphaWriter.Resource">
+            <summary>
+            Android Resource Designer class.
+            Exposes the Android Resource designer assembly into the project Namespace.
+            </summary>
+        </member>
+        <member name="T:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs">
+            <summary>
+            A helper type providing cached, reusable <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instances
+            for all properties generated with <see cref="T:CommunityToolkit.Mvvm.ComponentModel.ObservablePropertyAttribute"/>.
+            </summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.Books">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "Books" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.SelectedBook">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "SelectedBook" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.SelectedChapter">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "SelectedChapter" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.SelectedScene">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "SelectedScene" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.WordCount">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "WordCount" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.IsSidebarVisible">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "IsSidebarVisible" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.SidebarMode">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "SidebarMode" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.SelectedCharacter">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "SelectedCharacter" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.SelectedLocation">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "SelectedLocation" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.SelectedItem">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "SelectedItem" generated properties.</summary>
+        </member>
+        <member name="T:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs">
+            <summary>
+            A helper type providing cached, reusable <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instances
+            for all properties generated with <see cref="T:CommunityToolkit.Mvvm.ComponentModel.ObservablePropertyAttribute"/>.
+            </summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.Books">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "Books" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.SelectedBook">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "SelectedBook" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.SelectedChapter">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "SelectedChapter" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.SelectedScene">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "SelectedScene" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.WordCount">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "WordCount" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.IsSidebarVisible">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "IsSidebarVisible" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.SidebarMode">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "SidebarMode" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.SelectedCharacter">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "SelectedCharacter" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.SelectedLocation">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "SelectedLocation" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.SelectedItem">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "SelectedItem" generated properties.</summary>
+        </member>
+    </members>
+</doc>
