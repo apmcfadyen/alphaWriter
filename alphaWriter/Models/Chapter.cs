@@ -40,7 +40,9 @@ namespace alphaWriter.Models
             }
         }
 
-        public int WordCount => Scenes.Sum(s => s.WordCount);
+        public int WordCount => Scenes
+            .Where(s => s.Status != SceneStatus.Outline)
+            .Sum(s => s.WordCount);
 
         public Chapter()
         {
@@ -70,7 +72,7 @@ namespace alphaWriter.Models
 
         private void OnScenePropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(Scene.WordCount))
+            if (e.PropertyName is nameof(Scene.WordCount) or nameof(Scene.Status))
                 Notify(nameof(WordCount));
         }
     }

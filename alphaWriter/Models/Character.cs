@@ -9,5 +9,6 @@ namespace alphaWriter.Models
         public string Bio { get; set; } = string.Empty;
         public string Notes { get; set; } = string.Empty;
         public string ImagePath { get; set; } = string.Empty;
+        public string Aka { get; set; } = string.Empty;
     }
 }

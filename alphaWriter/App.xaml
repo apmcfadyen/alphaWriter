@@ -12,6 +12,9 @@
             </ResourceDictionary.MergedDictionaries>
             <converters:IsNotNullConverter x:Key="IsNotNullConverter" />
             <converters:ImagePathConverter x:Key="ImagePathConverter" />
+            <converters:SceneStatusColorConverter x:Key="SceneStatusColorConverter" />
+            <converters:SceneStatusDisplayConverter x:Key="SceneStatusDisplayConverter" />
+            <converters:IsNotNullOrEmptyConverter x:Key="IsNotNullOrEmptyConverter" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

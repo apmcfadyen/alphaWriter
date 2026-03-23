@@ -7,7 +7,7 @@ namespace alphaWriter.Views
     {
         private WriterViewModel _viewModel;
         private bool _editorReady;
-        private Scene? _previousScene;
+        private Scene? _currentEditorScene; // The scene currently loaded in the WebView
 
         public WriterPage(WriterViewModel viewModel)
         {
@@ -16,6 +16,8 @@ namespace alphaWriter.Views
             BindingContext = viewModel;
 
             _viewModel.SelectedSceneChanged += OnSelectedSceneChanged;
+            _viewModel.EntitiesChanged += () => _ = PushEntitiesAsync();
+            _viewModel.ReportsPanelShown += () => _ = LoadReportAsync();
         }
 
         protected override async void OnAppearing()
@@ -25,81 +27,149 @@ namespace alphaWriter.Views
             AttachGlobalDragSuppressor();
         }
 
+        protected override async void OnDisappearing()
+        {
+            base.OnDisappearing();
+            var scene = _currentEditorScene;
+            if (scene is not null)
+            {
+                try { await FlushEditorContentAsync(scene); }
+                catch { /* preserve existing content */ }
+            }
+        }
+
         private bool _dragSuppressorAttached;
 
         // ── WebView events ────────────────────────────────────────────────────
 
-        private void OnEditorNavigated(object? sender, WebNavigatedEventArgs e)
+        private async void OnEditorNavigated(object? sender, WebNavigatedEventArgs e)
         {
+            System.Diagnostics.Debug.WriteLine($"[EDITOR] OnEditorNavigated: result={e.Result}, url={e.Url}");
             if (e.Result == WebNavigationResult.Success &&
                 e.Url.EndsWith("editor.html", StringComparison.OrdinalIgnoreCase))
             {
                 _editorReady = true;
-                // Load content if a scene is already selected
+                // Load content if a scene is already selected, and track it so
+                // subsequent contentChanged notifications are not silently dropped.
                 if (_viewModel.SelectedScene is not null)
-                    _ = LoadSceneAsync(_viewModel.SelectedScene);
+                {
+                    System.Diagnostics.Debug.WriteLine($"[EDITOR] OnEditorNavigated: loading scene '{_viewModel.SelectedScene.Title}'");
+                    await LoadSceneAsync(_viewModel.SelectedScene);
+                    _currentEditorScene = _viewModel.SelectedScene;
+                }
             }
         }
 
         private async void OnEditorNavigating(object? sender, WebNavigatingEventArgs e)
         {
+            System.Diagnostics.Debug.WriteLine($"[EDITOR] OnEditorNavigating: url={e.Url}");
             if (e.Url.StartsWith("alphawriter://contentChanged", StringComparison.OrdinalIgnoreCase))
             {
                 e.Cancel = true;
-                // getContent() returns _rawContent — a pre-captured plain string.
-                // EvaluateJavaScriptAsync JSON-encodes the return value, so deserialize it.
+
+                // Save to the scene that is actually loaded in the editor,
+                // not SelectedScene — a stale notification can arrive after a scene switch.
+                var targetScene = _currentEditorScene;
+                System.Diagnostics.Debug.WriteLine($"[EDITOR] contentChanged: _currentEditorScene={targetScene?.Title ?? "NULL"}");
+                if (targetScene is null) return;
+
                 var raw = await EditorWebView.EvaluateJavaScriptAsync("getContent()");
-                string content;
-                try { content = System.Text.Json.JsonSerializer.Deserialize<string>(raw) ?? string.Empty; }
-                catch { content = raw ?? string.Empty; }
+                System.Diagnostics.Debug.WriteLine($"[EDITOR] contentChanged getContent raw={raw?.Substring(0, Math.Min(raw?.Length ?? 0, 100)) ?? "NULL"}");
+                if (raw is null) return; // WebView unavailable — don't wipe content
+                var content = DecodeJsString(raw);
                 var wcRaw = await EditorWebView.EvaluateJavaScriptAsync("getWordCount()");
                 int? jsWordCount = null;
                 if (int.TryParse(wcRaw, out var wc)) jsWordCount = wc;
-                _viewModel.SaveContent(content, jsWordCount);
+
+                targetScene.Content = content;
+                System.Diagnostics.Debug.WriteLine($"[EDITOR] contentChanged: saved {content.Length} chars, wc={jsWordCount} to '{targetScene.Title}'");
+                if (jsWordCount.HasValue)
+                    targetScene.WordCount = jsWordCount.Value;
+                _viewModel.UpdateWordCountDisplay(targetScene);
+                _viewModel.DebouncedSave();
             }
+            else if (e.Url.StartsWith("alphawriter://entityClicked", StringComparison.OrdinalIgnoreCase))
+            {
+                e.Cancel = true;
+                var id   = ExtractQueryParam(e.Url, "id");
+                var type = ExtractQueryParam(e.Url, "type");
+                if (id is not null && type is not null)
+                    _viewModel.ShowEntityPreview(id, type);
+            }
+        }
+
+        private static string? ExtractQueryParam(string url, string param)
+        {
+            var qi = url.IndexOf('?');
+            if (qi < 0) return null;
+            foreach (var part in url[(qi + 1)..].Split('&'))
+            {
+                var kv = part.Split('=', 2);
+                if (kv.Length == 2 && kv[0] == param)
+                    return Uri.UnescapeDataString(kv[1]);
+            }
+            return null;
         }
 
         // ── Scene change: update WebView content ──────────────────────────────
 
         private async void OnSelectedSceneChanged(Scene? scene)
         {
+            System.Diagnostics.Debug.WriteLine($"[EDITOR] OnSelectedSceneChanged: scene={scene?.Title ?? "NULL"}, _editorReady={_editorReady}, _currentEditorScene={_currentEditorScene?.Title ?? "NULL"}");
             if (!_editorReady) return;
 
-            // Flush the outgoing scene's content before loading the new one
-            if (_previousScene is not null)
-                await FlushEditorContentAsync(_previousScene);
+            // Flush the outgoing scene's content before loading the new one.
+            // Clear _currentEditorScene first so stale navigations are ignored.
+            var outgoing = _currentEditorScene;
+            _currentEditorScene = null;
 
-            _previousScene = scene;
+            if (outgoing is not null)
+            {
+                System.Diagnostics.Debug.WriteLine($"[EDITOR] Flushing outgoing scene '{outgoing.Title}', current Content length={outgoing.Content?.Length ?? -1}");
+                await FlushEditorContentAsync(outgoing);
+                System.Diagnostics.Debug.WriteLine($"[EDITOR] After flush, outgoing '{outgoing.Title}' Content length={outgoing.Content?.Length ?? -1}");
+            }
 
             if (scene is null)
             {
-                MainThread.BeginInvokeOnMainThread(async () =>
+                await MainThread.InvokeOnMainThreadAsync(async () =>
                     await EditorWebView.EvaluateJavaScriptAsync("setContent('')"));
                 return;
             }
 
+            System.Diagnostics.Debug.WriteLine($"[EDITOR] Loading scene '{scene.Title}', Content length={scene.Content?.Length ?? -1}, Content preview='{scene.Content?.Substring(0, Math.Min(scene.Content?.Length ?? 0, 80))}'");
             await LoadSceneAsync(scene);
+            _currentEditorScene = scene;
+            System.Diagnostics.Debug.WriteLine($"[EDITOR] Scene '{scene.Title}' loaded, _currentEditorScene set");
         }
 
         private async Task FlushEditorContentAsync(Scene scene)
         {
-            await MainThread.InvokeOnMainThreadAsync(async () =>
-                await EditorWebView.EvaluateJavaScriptAsync("flushContent()"));
+            try
+            {
+                var raw = await EditorWebView.EvaluateJavaScriptAsync(
+                    "(flushContent(), getContent())");
+                System.Diagnostics.Debug.WriteLine($"[EDITOR] FlushEditor: raw result type={raw?.GetType().Name ?? "NULL"}, length={raw?.Length ?? -1}, preview='{raw?.Substring(0, Math.Min(raw?.Length ?? 0, 100))}'");
+                if (raw is not null)
+                {
+                    var content = DecodeJsString(raw);
+                    System.Diagnostics.Debug.WriteLine($"[EDITOR] FlushEditor: decoded content length={content.Length}, preview='{content.Substring(0, Math.Min(content.Length, 100))}'");
+                    scene.Content = content;
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"[EDITOR] FlushEditor: raw was NULL, preserving existing content");
+                }
 
-            var raw = await MainThread.InvokeOnMainThreadAsync(async () =>
-                await EditorWebView.EvaluateJavaScriptAsync("getContent()"));
-            string content;
-            try { content = System.Text.Json.JsonSerializer.Deserialize<string>(raw) ?? string.Empty; }
-            catch { content = raw ?? string.Empty; }
-
-            var wcRaw = await MainThread.InvokeOnMainThreadAsync(async () =>
-                await EditorWebView.EvaluateJavaScriptAsync("getWordCount()"));
-            int? jsWordCount = null;
-            if (int.TryParse(wcRaw, out var wc)) jsWordCount = wc;
-
-            scene.Content = content;
-            if (jsWordCount.HasValue)
-                scene.WordCount = jsWordCount.Value;
+                var wcRaw = await EditorWebView.EvaluateJavaScriptAsync("getWordCount()");
+                System.Diagnostics.Debug.WriteLine($"[EDITOR] FlushEditor: wordCount raw='{wcRaw}'");
+                if (int.TryParse(wcRaw, out var wc))
+                    scene.WordCount = wc;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[EDITOR] FlushEditor EXCEPTION: {ex.Message}");
+            }
 
             _viewModel.TriggerSave();
         }
@@ -108,10 +178,276 @@ namespace alphaWriter.Views
         {
             if (!_editorReady) return;
 
-            var content = scene.Content ?? string.Empty;
-            var escaped = System.Text.Json.JsonSerializer.Serialize(content);
+            var content    = scene.Content ?? string.Empty;
+            var contentArg = System.Text.Json.JsonSerializer.Serialize(content);
+            System.Diagnostics.Debug.WriteLine($"[EDITOR] LoadScene: '{scene.Title}', content length={content.Length}");
+
+            // 1. Set entities — pass the JSON array directly as a JS expression
+            //    (no double-serialization / JSON.parse needed)
+            try
+            {
+                var entitiesJson = _viewModel.GetEntityManifestJson(); // e.g. [{"id":"...","name":"John",...}]
+                var entResult = await EditorWebView.EvaluateJavaScriptAsync($"setEntities({entitiesJson})");
+                System.Diagnostics.Debug.WriteLine($"[EDITOR] LoadScene setEntities: {entResult} entities loaded");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[EDITOR] LoadScene setEntities EXCEPTION: {ex.Message}");
+            }
+
+            // 2. Set content (separate call — setContent applies entity highlighting internally)
+            await EditorWebView.EvaluateJavaScriptAsync($"setContent({contentArg})");
+
+            // 3. Safety net: explicitly re-highlight after both entities and content are set.
+            //    This catches any case where setContent's built-in highlighting didn't fire
+            //    (e.g. _entities wasn't visible due to a prior WebView2 error state).
+            try
+            {
+                await EditorWebView.EvaluateJavaScriptAsync("refreshHighlighting()");
+            }
+            catch { /* non-critical */ }
+        }
+
+        /// <summary>
+        /// Re-pushes the current entity manifest while a scene is live in the editor.
+        /// Called when entity names/aliases change (EntitiesChanged event).
+        /// </summary>
+        private async Task PushEntitiesAsync()
+        {
+            if (!_editorReady) return;
+            var entitiesJson = _viewModel.GetEntityManifestJson();
             await MainThread.InvokeOnMainThreadAsync(async () =>
-                await EditorWebView.EvaluateJavaScriptAsync($"setContent({escaped})"));
+                await EditorWebView.EvaluateJavaScriptAsync($"setEntities({entitiesJson})"));
+        }
+
+        // ── Report WebView ──────────────────────────────────────────────────
+        // The report HTML is generated entirely in C# and loaded via
+        // HtmlWebViewSource.  This bypasses WebView2's aggressive file
+        // caching (the same issue that caused the editor.html regression)
+        // and eliminates all timing / readiness race conditions because the
+        // entity data is embedded directly in the HTML — no post-load
+        // EvaluateJavaScriptAsync push required.
+
+        private string? _cachedVisNetworkJs;
+
+        private async Task LoadReportAsync()
+        {
+            try
+            {
+                // Cache the 490 KB vis-network library on first use
+                if (_cachedVisNetworkJs is null)
+                {
+                    using var stream = await FileSystem.OpenAppPackageFileAsync("vis-network.min.js");
+                    using var reader = new StreamReader(stream);
+                    _cachedVisNetworkJs = await reader.ReadToEndAsync();
+                }
+
+                var dataJson = _viewModel.BuildEntityRelationshipJson();
+                System.Diagnostics.Debug.WriteLine(
+                    $"[REPORT] LoadReportAsync: dataJson length={dataJson.Length}, " +
+                    $"visJs length={_cachedVisNetworkJs.Length}");
+
+                var html = BuildReportHtml(_cachedVisNetworkJs, dataJson);
+
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                    ReportWebView.Source = new HtmlWebViewSource { Html = html });
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[REPORT] LoadReportAsync failed: {ex}");
+            }
+        }
+
+        /// <summary>
+        /// Builds a fully self-contained HTML document with vis-network JS
+        /// inlined and entity data embedded — nothing external, nothing cached.
+        /// Uses absolute positioning (not flexbox) so the canvas container has
+        /// rigid pixel dimensions that survive vis.js interaction redraws.
+        /// </summary>
+        private static string BuildReportHtml(string visJs, string dataJson)
+        {
+            // CSS — absolute positioning prevents layout reflow from stealing
+            // the container's dimensions during vis.js hover / click redraws.
+            const string css = @"
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { width:100%; height:100%; overflow:hidden;
+    background:#1E1E28; color:#E8E4DC;
+    font-family:'Segoe UI',system-ui,sans-serif; }
+#controls { position:absolute; top:0; left:0; right:0; height:42px;
+    display:flex; align-items:center; gap:8px; padding:0 16px;
+    background:#22222A; border-bottom:1px solid #3A3A48; z-index:2; }
+#controls .label { font-size:12px; color:#9E9AA0; margin-right:4px; }
+.filter-btn { display:inline-flex; align-items:center; gap:5px;
+    padding:4px 12px; border:1px solid #3A3A48; border-radius:4px;
+    background:#2A2A35; color:#E8E4DC; font-size:12px;
+    cursor:pointer; transition:all .15s ease; user-select:none; }
+.filter-btn:hover { background:#2E2E3A; }
+.filter-btn.active { border-color:var(--accent); background:#313145; }
+.filter-btn .dot { width:8px; height:8px; border-radius:50%;
+    background:var(--accent); }
+#info { margin-left:auto; font-size:11px; color:#5A5A6A; }
+#network { position:absolute; top:42px; left:0; right:0; bottom:0; }
+#empty { position:absolute; top:42px; left:0; right:0; bottom:0;
+    display:none; justify-content:center; align-items:center;
+    text-align:center; color:#5A5A6A; font-size:14px;
+    font-style:italic; padding:40px; line-height:1.6; }
+div.vis-tooltip { position:absolute; background:#2A2A35 !important;
+    border:1px solid #4A4A5C !important; color:#E8E4DC !important;
+    font-size:12px !important; border-radius:4px !important;
+    padding:6px 10px !important;
+    box-shadow:0 4px 12px rgba(0,0,0,.5) !important;
+    pointer-events:none; z-index:10; }
+";
+
+            // JS application logic (vis-network.min.js is prepended separately)
+            const string appJs = @"
+var _allNodes=[],_allEdges=[];
+var _filters={character:true,location:true,item:true};
+var _network=null;
+var _nodesDS=new vis.DataSet();
+var _edgesDS=new vis.DataSet();
+var TYPE_COLORS={
+    character:{background:'#A89EC9',border:'#8A7EB0',
+        highlight:{background:'#C0B4E0',border:'#A89EC9'},
+        hover:{background:'#B8AAD8',border:'#A89EC9'}},
+    location:{background:'#7EC8A4',border:'#5EAE84',
+        highlight:{background:'#A0E0C0',border:'#7EC8A4'},
+        hover:{background:'#90D8B4',border:'#7EC8A4'}},
+    item:{background:'#C8B07A',border:'#B09860',
+        highlight:{background:'#E0C890',border:'#C8B07A'},
+        hover:{background:'#D8C088',border:'#C8B07A'}}
+};
+var TYPE_LABELS={character:'Character',location:'Location',item:'Item'};
+
+function initNetwork(){
+    var c=document.getElementById('network');
+    _network=new vis.Network(c,{nodes:_nodesDS,edges:_edgesDS},{
+        autoResize:false,
+        nodes:{shape:'dot',
+            font:{color:'#E8E4DC',size:13,face:""'Segoe UI',system-ui,sans-serif""},
+            borderWidth:2,
+            shadow:{enabled:true,color:'rgba(0,0,0,0.4)',size:8,x:0,y:2}},
+        edges:{color:{inherit:'both',opacity:0.5},
+            smooth:{enabled:true,type:'continuous',roundness:0.3},
+            hoverWidth:1.5,
+            scaling:{min:1,max:8,label:{enabled:false}}},
+        interaction:{dragNodes:true,hover:true,tooltipDelay:200,
+            hideEdgesOnDrag:false,multiselect:true},
+        physics:{enabled:true,solver:'forceAtlas2Based',
+            forceAtlas2Based:{gravitationalConstant:-40,centralGravity:0.008,
+                springLength:140,springConstant:0.06,damping:0.4,avoidOverlap:0.3},
+            stabilization:{enabled:true,iterations:600,updateInterval:30,fit:true}}
+    });
+    _network.once('stabilizationIterationsDone',function(){
+        _network.setOptions({physics:{enabled:false}});
+    });
+    // Manually size the canvas to its container once, since autoResize is off.
+    var rect=c.getBoundingClientRect();
+    _network.setSize(rect.width+'px',rect.height+'px');
+    _network.redraw(); _network.fit();
+}
+
+function setData(data){
+    if(typeof data==='string'){try{data=JSON.parse(data);}catch(e){data={nodes:[],edges:[]};}}
+    _allNodes=(data.nodes||[]).map(function(n){
+        var colors=TYPE_COLORS[n.type]||TYPE_COLORS.character;
+        var sc=n.scenes||0;
+        var tip=n.label+'  \u2014  '+(TYPE_LABELS[n.type]||n.type);
+        if(sc>0) tip+='\nAppears in '+sc+' scene'+(sc!==1?'s':'');
+        else tip+='\nNot yet tagged to any scene';
+        return{id:n.id,label:n.label,type:n.type,color:colors,
+            font:{color:'#E8E4DC'},title:tip};
+    });
+    _allEdges=(data.edges||[]).map(function(e,i){
+        return{id:'e'+i,from:e.from,to:e.to,value:e.value,
+            title:e.value+' shared scene'+(e.value!==1?'s':'')};
+    });
+    var wSum={};
+    _allEdges.forEach(function(e){
+        wSum[e.from]=(wSum[e.from]||0)+e.value;
+        wSum[e.to]=(wSum[e.to]||0)+e.value;
+    });
+    var mx=1; for(var k in wSum){if(wSum[k]>mx)mx=wSum[k];}
+    _allNodes.forEach(function(n){
+        var w=wSum[n.id]||0;
+        n.size=w>0?14+Math.round(16*(w/mx)):12;
+    });
+    applyFilters();
+}
+
+function toggleFilter(type,btn){
+    _filters[type]=!_filters[type];
+    btn.classList.toggle('active',_filters[type]);
+    applyFilters();
+}
+
+function applyFilters(){
+    var vt={}; for(var t in _filters){if(_filters[t])vt[t]=true;}
+    var vn=_allNodes.filter(function(n){return vt[n.type];});
+    var vi={}; vn.forEach(function(n){vi[n.id]=true;});
+    var ve=_allEdges.filter(function(e){return vi[e.from]&&vi[e.to];});
+    _nodesDS.clear(); _edgesDS.clear();
+    _nodesDS.add(vn); _edgesDS.add(ve);
+    var has=vn.length>0;
+    document.getElementById('network').style.visibility=has?'visible':'hidden';
+    document.getElementById('empty').style.display=has?'none':'flex';
+    document.getElementById('info').textContent=
+        vn.length+' entities, '+ve.length+' connections';
+    if(_network&&has){
+        _network.setOptions({physics:{enabled:true}});
+        _network.once('stabilizationIterationsDone',function(){
+            _network.setOptions({physics:{enabled:false}});
+        });
+        _network.fit({animation:{duration:300,easingFunction:'easeInOutQuad'}});
+    }
+}
+";
+
+            const string bodyHtml = @"
+<div id=""controls"">
+    <span class=""label"">Show:</span>
+    <button class=""filter-btn active"" style=""--accent:#A89EC9;""
+            onclick=""toggleFilter('character',this)"">
+        <span class=""dot""></span> Characters</button>
+    <button class=""filter-btn active"" style=""--accent:#7EC8A4;""
+            onclick=""toggleFilter('location',this)"">
+        <span class=""dot""></span> Locations</button>
+    <button class=""filter-btn active"" style=""--accent:#C8B07A;""
+            onclick=""toggleFilter('item',this)"">
+        <span class=""dot""></span> Items</button>
+    <span id=""info""></span>
+</div>
+<div id=""network""></div>
+<div id=""empty"">No entities defined in this book yet.<br/>
+    Add characters, locations, or items in the sidebar tabs.</div>
+";
+
+            return "<!DOCTYPE html><html><head><meta charset=\"utf-8\"/>"
+                 + "<style>" + css + "</style></head><body>"
+                 + bodyHtml
+                 + "<script>" + visJs + "</" + "script>"
+                 + "<script>" + appJs
+                 + "initNetwork();setData(" + dataJson + ");"
+                 + "</" + "script></body></html>";
+        }
+
+        // ── JS string decoding ────────────────────────────────────────────────
+        // WebView2 on Windows returns EvaluateJavaScriptAsync results as a JSON
+        // string WITH outer quotes on some MAUI versions, and WITHOUT on others.
+        // When the outer quotes are absent, JSON deserialization fails and the
+        // raw string may still contain \uXXXX escape sequences (e.g. \u003C for
+        // '<'). We decode those sequences so the stored HTML always has real
+        // angle-bracket characters.
+        private static string DecodeJsString(string? raw)
+        {
+            if (raw is null) return string.Empty;
+            try { return System.Text.Json.JsonSerializer.Deserialize<string>(raw) ?? string.Empty; }
+            catch { }
+            // Decode \uXXXX sequences left by WebView2's unquoted JSON encoding.
+            return System.Text.RegularExpressions.Regex.Replace(
+                raw,
+                @"\\u([0-9a-fA-F]{4})",
+                m => ((char)Convert.ToInt32(m.Groups[1].Value, 16)).ToString());
         }
 
         // ── Global drag-glyph suppression (Windows) ──────────────────────────
@@ -354,6 +690,12 @@ namespace alphaWriter.Views
 
         private void OnElementFieldUnfocused(object? sender, FocusEventArgs e)
             => _viewModel.SaveElementDetails();
+
+        private void OnSceneMetadataUnfocused(object? sender, FocusEventArgs e)
+            => _viewModel.SaveSceneMetadata();
+
+        private void OnBookInfoFieldUnfocused(object? sender, FocusEventArgs e)
+            => _viewModel.SaveBookInfo();
 
         // ── Formatting toolbar ────────────────────────────────────────────────
 

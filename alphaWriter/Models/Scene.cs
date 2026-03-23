@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace alphaWriter.Models
 {
@@ -49,12 +51,116 @@ namespace alphaWriter.Models
             }
         }
 
+        // ── Scene Metadata ──────────────────────────────────────────────────
+
+        private SceneStatus _status = SceneStatus.Outline;
+        public SceneStatus Status
+        {
+            get => _status;
+            set
+            {
+                if (_status == value) return;
+                _status = value;
+                Notify(nameof(Status));
+            }
+        }
+
+        public List<string> ViewpointCharacterIds { get; set; } = new();
+
+        // ── Scene entity participation ────────────────────────────────────────
+        // All characters / locations / items that appear in the scene, whether
+        // auto-detected from the text or manually linked by the writer.
+        public List<string> CharacterIds { get; set; } = new();
+        public List<string> LocationIds  { get; set; } = new();
+        public List<string> ItemIds      { get; set; } = new();
+
+        private string _goal = string.Empty;
+        public string Goal
+        {
+            get => _goal;
+            set
+            {
+                if (_goal == value) return;
+                _goal = value;
+                Notify(nameof(Goal));
+            }
+        }
+
+        private string _conflict = string.Empty;
+        public string Conflict
+        {
+            get => _conflict;
+            set
+            {
+                if (_conflict == value) return;
+                _conflict = value;
+                Notify(nameof(Conflict));
+            }
+        }
+
+        private string _outcome = string.Empty;
+        public string Outcome
+        {
+            get => _outcome;
+            set
+            {
+                if (_outcome == value) return;
+                _outcome = value;
+                Notify(nameof(Outcome));
+            }
+        }
+
+        private string _notes = string.Empty;
+        public string Notes
+        {
+            get => _notes;
+            set
+            {
+                if (_notes == value) return;
+                _notes = value;
+                Notify(nameof(Notes));
+            }
+        }
+
         private int ComputeWordCount()
         {
             if (string.IsNullOrWhiteSpace(_content)) return 0;
-            var text = DecodeEntities(StripComments(StripHtml(_content)));
+            var text = DecodeEntities(StripComments(StripHtml(DecodeUnicodeEscapes(_content))));
             return text.Split([' ', '\u00A0', '\n', '\r', '\t'],
                 StringSplitOptions.RemoveEmptyEntries).Length;
+        }
+
+        /// <summary>
+        /// Returns all words from the scene's HTML content as lowercase strings,
+        /// with HTML, comments, and entities stripped. Used for statistics.
+        /// </summary>
+        public static IReadOnlyList<string> ExtractWords(string htmlContent)
+        {
+            if (string.IsNullOrWhiteSpace(htmlContent)) return [];
+            var text = DecodeEntities(StripComments(StripHtml(DecodeUnicodeEscapes(htmlContent))));
+            return text.Split([' ', '\u00A0', '\n', '\r', '\t'],
+                    StringSplitOptions.RemoveEmptyEntries)
+                .Select(w => CleanWord(w).ToLowerInvariant())
+                .Where(w => w.Length > 0)
+                .ToList();
+        }
+
+        // Decodes \uXXXX sequences that WebView2 may leave as literal text when
+        // the JSON wrapper is stripped before reaching our code.
+        private static readonly Regex _unicodeEscapeRx =
+            new(@"\\u([0-9a-fA-F]{4})", RegexOptions.Compiled);
+
+        private static string DecodeUnicodeEscapes(string text) =>
+            _unicodeEscapeRx.Replace(text,
+                m => ((char)Convert.ToInt32(m.Groups[1].Value, 16)).ToString());
+
+        // Strips leading/trailing punctuation from a token so "word," → "word".
+        private static string CleanWord(string token)
+        {
+            int start = 0, end = token.Length - 1;
+            while (start <= end && !char.IsLetterOrDigit(token[start])) start++;
+            while (end >= start && !char.IsLetterOrDigit(token[end])) end--;
+            return start > end ? string.Empty : token[start..(end + 1)];
         }
 
         // Converts HTML to plain text. Block-level elements (<br>, <div>, <p>)

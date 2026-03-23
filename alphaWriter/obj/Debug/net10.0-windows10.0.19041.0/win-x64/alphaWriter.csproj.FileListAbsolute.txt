@@ -518,3 +518,6 @@ C:\Users\fmExtreme\source\repos\alphaWriter\alphaWriter\obj\Debug\net10.0-window
 C:\Users\fmExtreme\source\repos\alphaWriter\alphaWriter\obj\Debug\net10.0-windows10.0.19041.0\win-x64\qualifiers.txt
 C:\Users\fmExtreme\source\repos\alphaWriter\alphaWriter\obj\Debug\net10.0-windows10.0.19041.0\win-x64\qualifiers.txt.intermediate
 C:\Users\fmExtreme\source\repos\alphaWriter\alphaWriter\obj\Debug\net10.0-windows10.0.19041.0\win-x64\MultipleQualifiersPerDimensionFound.txt
+C:\Users\fmExtreme\source\repos\alphaWriter\alphaWriter\obj\Debug\net10.0-windows10.0.19041.0\win-x64\alphaWriter.sourcelink.json
+C:\Users\fmExtreme\source\repos\alphaWriter\alphaWriter\bin\Debug\net10.0-windows10.0.19041.0\win-x64\entity-report.html
+C:\Users\fmExtreme\source\repos\alphaWriter\alphaWriter\bin\Debug\net10.0-windows10.0.19041.0\win-x64\vis-network.min.js

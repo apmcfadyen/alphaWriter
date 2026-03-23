@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<!-- Local bundle — no CDN dependency -->
+<script src="vis-network.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    background: #1E1E28;
+    color: #E8E4DC;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    overflow: hidden;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ── Filter bar ─────────────────────────────────────────────── */
+#controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: #22222A;
+    border-bottom: 1px solid #3A3A48;
+    flex-shrink: 0;
+}
+
+#controls .label {
+    font-size: 12px;
+    color: #9E9AA0;
+    margin-right: 4px;
+}
+
+.filter-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 12px;
+    border: 1px solid #3A3A48;
+    border-radius: 4px;
+    background: #2A2A35;
+    color: #E8E4DC;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+}
+.filter-btn:hover { background: #2E2E3A; }
+.filter-btn.active { border-color: var(--accent); background: #313145; }
+.filter-btn .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+}
+
+#info {
+    margin-left: auto;
+    font-size: 11px;
+    color: #5A5A6A;
+}
+
+/* ── Network container ──────────────────────────────────────── */
+#network {
+    flex: 1;
+    width: 100%;
+}
+
+/* ── Empty state ────────────────────────────────────────────── */
+#empty {
+    display: none;
+    flex: 1;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    color: #5A5A6A;
+    font-size: 14px;
+    font-style: italic;
+    padding: 40px;
+    line-height: 1.6;
+}
+
+/* ── Tooltip ────────────────────────────────────────────────── */
+div.vis-tooltip {
+    background: #2A2A35 !important;
+    border: 1px solid #4A4A5C !important;
+    color: #E8E4DC !important;
+    font-family: 'Segoe UI', system-ui, sans-serif !important;
+    font-size: 12px !important;
+    border-radius: 4px !important;
+    padding: 6px 10px !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5) !important;
+}
+</style>
+</head>
+<body>
+
+<div id="controls">
+    <span class="label">Show:</span>
+    <button class="filter-btn active" data-type="character"
+            style="--accent: #A89EC9;"
+            onclick="toggleFilter('character', this)">
+        <span class="dot"></span> Characters
+    </button>
+    <button class="filter-btn active" data-type="location"
+            style="--accent: #7EC8A4;"
+            onclick="toggleFilter('location', this)">
+        <span class="dot"></span> Locations
+    </button>
+    <button class="filter-btn active" data-type="item"
+            style="--accent: #C8B07A;"
+            onclick="toggleFilter('item', this)">
+        <span class="dot"></span> Items
+    </button>
+    <span id="info"></span>
+</div>
+
+<div id="network"></div>
+<div id="empty">No entity relationships found.<br/>
+    Tag characters, locations, and items to scenes<br/>
+    (via the metadata panel or by mentioning their names)<br/>
+    to see how they connect across your book.</div>
+
+<script>
+// ── Globals ────────────────────────────────────────────────────
+var _allNodes = [];
+var _allEdges = [];
+var _filters  = { character: true, location: true, item: true };
+var _network  = null;
+var _nodesDS  = new vis.DataSet();
+var _edgesDS  = new vis.DataSet();
+var _ready    = false;
+
+var TYPE_COLORS = {
+    character: { background: '#A89EC9', border: '#8A7EB0', highlight: { background: '#C0B4E0', border: '#A89EC9' }, hover: { background: '#B8AAD8', border: '#A89EC9' } },
+    location:  { background: '#7EC8A4', border: '#5EAE84', highlight: { background: '#A0E0C0', border: '#7EC8A4' }, hover: { background: '#90D8B4', border: '#7EC8A4' } },
+    item:      { background: '#C8B07A', border: '#B09860', highlight: { background: '#E0C890', border: '#C8B07A' }, hover: { background: '#D8C088', border: '#C8B07A' } }
+};
+
+var TYPE_LABELS = { character: 'Character', location: 'Location', item: 'Item' };
+
+// ── Initialise vis.js network ──────────────────────────────────
+function initNetwork() {
+    var container = document.getElementById('network');
+    var options = {
+        nodes: {
+            shape: 'dot',
+            font: { color: '#E8E4DC', size: 13, face: "'Segoe UI', system-ui, sans-serif" },
+            borderWidth: 2,
+            shadow: { enabled: true, color: 'rgba(0,0,0,0.4)', size: 8, x: 0, y: 2 }
+        },
+        edges: {
+            color: { inherit: 'both', opacity: 0.5 },
+            smooth: { enabled: true, type: 'continuous', roundness: 0.3 },
+            hoverWidth: 1.5,
+            scaling: { min: 1, max: 8, label: { enabled: false } }
+        },
+        interaction: {
+            dragNodes: true,
+            hover: true,
+            tooltipDelay: 200,
+            hideEdgesOnDrag: false,
+            multiselect: true
+        },
+        physics: {
+            enabled: true,
+            solver: 'forceAtlas2Based',
+            forceAtlas2Based: {
+                gravitationalConstant: -40,
+                centralGravity: 0.008,
+                springLength: 140,
+                springConstant: 0.06,
+                damping: 0.4,
+                avoidOverlap: 0.3
+            },
+            stabilization: {
+                enabled: true,
+                iterations: 600,
+                updateInterval: 30,
+                fit: true
+            }
+        }
+    };
+
+    _network = new vis.Network(container, { nodes: _nodesDS, edges: _edgesDS }, options);
+
+    // After stabilisation, disable physics so nodes stay where the user drags them.
+    _network.once('stabilizationIterationsDone', function() {
+        _network.setOptions({ physics: { enabled: false } });
+    });
+}
+
+// ── Receive data from C# ──────────────────────────────────────
+function setData(json) {
+    var data;
+    try { data = (typeof json === 'string') ? JSON.parse(json) : json; }
+    catch(e) { data = { nodes: [], edges: [] }; }
+
+    _allNodes = (data.nodes || []).map(function(n) {
+        var colors = TYPE_COLORS[n.type] || TYPE_COLORS.character;
+        var sceneCount = n.scenes || 0;
+        var tooltip = n.label + '  \u2014  ' + (TYPE_LABELS[n.type] || n.type);
+        if (sceneCount > 0)
+            tooltip += '\nAppears in ' + sceneCount + ' scene' + (sceneCount !== 1 ? 's' : '');
+        else
+            tooltip += '\nNot yet tagged to any scene';
+        return {
+            id:    n.id,
+            label: n.label,
+            type:  n.type,
+            color: colors,
+            font:  { color: '#E8E4DC' },
+            title: tooltip
+        };
+    });
+
+    _allEdges = (data.edges || []).map(function(e, i) {
+        return {
+            id:    'e' + i,
+            from:  e.from,
+            to:    e.to,
+            value: e.value,
+            title: e.value + ' shared scene' + (e.value !== 1 ? 's' : '')
+        };
+    });
+
+    // Compute node sizes: isolated nodes get a visible minimum, connected
+    // nodes scale proportionally to their total co-occurrence weight.
+    var weightSum = {};
+    _allEdges.forEach(function(e) {
+        weightSum[e.from] = (weightSum[e.from] || 0) + e.value;
+        weightSum[e.to]   = (weightSum[e.to]   || 0) + e.value;
+    });
+    var maxWeight = 1;
+    for (var k in weightSum) { if (weightSum[k] > maxWeight) maxWeight = weightSum[k]; }
+    _allNodes.forEach(function(n) {
+        var w = weightSum[n.id] || 0;
+        n.size = w > 0 ? 14 + Math.round(16 * (w / maxWeight)) : 12;
+    });
+
+    applyFilters();
+}
+
+// ── Filter logic ──────────────────────────────────────────────
+function toggleFilter(type, btn) {
+    _filters[type] = !_filters[type];
+    btn.classList.toggle('active', _filters[type]);
+    applyFilters();
+}
+
+function applyFilters() {
+    var visibleTypes = {};
+    for (var t in _filters) { if (_filters[t]) visibleTypes[t] = true; }
+
+    var visibleNodes = _allNodes.filter(function(n) { return visibleTypes[n.type]; });
+    var visibleIds   = {};
+    visibleNodes.forEach(function(n) { visibleIds[n.id] = true; });
+
+    var visibleEdges = _allEdges.filter(function(e) {
+        return visibleIds[e.from] && visibleIds[e.to];
+    });
+
+    _nodesDS.clear();
+    _edgesDS.clear();
+    _nodesDS.add(visibleNodes);
+    _edgesDS.add(visibleEdges);
+
+    // Show or hide empty state.
+    var hasData = visibleNodes.length > 0;
+    document.getElementById('network').style.display = hasData ? 'block' : 'none';
+    document.getElementById('empty').style.display   = hasData ? 'none'  : 'flex';
+
+    // Update info text.
+    document.getElementById('info').textContent =
+        visibleNodes.length + ' entities, ' + visibleEdges.length + ' connections';
+
+    // Re-fit if the network exists and there is data.
+    if (_network && hasData) {
+        _network.setOptions({ physics: { enabled: true } });
+        _network.once('stabilizationIterationsDone', function() {
+            _network.setOptions({ physics: { enabled: false } });
+        });
+        _network.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } });
+    }
+}
+
+// ── Boot ──────────────────────────────────────────────────────
+initNetwork();
+_ready = true;
+
+// Signal to C# that the page is fully initialised and setData() is
+// callable.  This mirrors the alphawriter:// protocol used by the editor.
+window.location.href = 'alphawriter://reportReady';
+</script>
+</body>
+</html>

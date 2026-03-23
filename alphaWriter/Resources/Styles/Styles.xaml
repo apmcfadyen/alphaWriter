@@ -140,4 +140,17 @@
         <Setter Property="AutoSize" Value="TextChanges" />
     </Style>
 
+    <!-- Compact chip-style button for status selection in metadata panel -->
+    <Style x:Key="MetadataChipButton" TargetType="Button">
+        <Setter Property="BackgroundColor" Value="{StaticResource SurfaceRaised}" />
+        <Setter Property="TextColor" Value="{StaticResource TextSecondary}" />
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="Padding" Value="10,4" />
+        <Setter Property="Margin" Value="0" />
+        <Setter Property="MinimumHeightRequest" Value="26" />
+        <Setter Property="BorderWidth" Value="1" />
+        <Setter Property="BorderColor" Value="{StaticResource BorderSubtle}" />
+    </Style>
+
 </ResourceDictionary>

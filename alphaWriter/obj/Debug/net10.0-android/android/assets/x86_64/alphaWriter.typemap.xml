@@ -1,10 +1,10 @@
-<api type="debug" assembly-name="alphaWriter" mvid="d3849f51f0614876a8c2aa6c46062f12">
+<api type="debug" assembly-name="alphaWriter" mvid="54c6b2d7b0ed492092980cb6ba7ffcc0">
   <java-to-managed>
-    <entry java-name="crc64a243e81e73b2af9e/MainActivity" managed-name="alphaWriter.MainActivity, alphaWriter" managed-type-token-id="33554443" />
-    <entry java-name="crc64a243e81e73b2af9e/MainApplication" managed-name="alphaWriter.MainApplication, alphaWriter" managed-type-token-id="33554444" />
+    <entry java-name="crc64a243e81e73b2af9e/MainActivity" managed-name="alphaWriter.MainActivity, alphaWriter" managed-type-token-id="33554447" />
+    <entry java-name="crc64a243e81e73b2af9e/MainApplication" managed-name="alphaWriter.MainApplication, alphaWriter" managed-type-token-id="33554448" />
   </java-to-managed>
   <managed-to-java>
-    <entry java-name="crc64a243e81e73b2af9e/MainActivity" managed-name="alphaWriter.MainActivity, alphaWriter" managed-type-token-id="33554443" />
-    <entry java-name="crc64a243e81e73b2af9e/MainApplication" managed-name="alphaWriter.MainApplication, alphaWriter" managed-type-token-id="33554444" />
+    <entry java-name="crc64a243e81e73b2af9e/MainActivity" managed-name="alphaWriter.MainActivity, alphaWriter" managed-type-token-id="33554447" />
+    <entry java-name="crc64a243e81e73b2af9e/MainApplication" managed-name="alphaWriter.MainApplication, alphaWriter" managed-type-token-id="33554448" />
   </managed-to-java>
 </api>

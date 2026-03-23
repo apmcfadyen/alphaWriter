@@ -2678,3 +2678,6 @@ C:\Users\fmExtreme\source\repos\alphaWriter\alphaWriter\obj\Debug\net10.0-androi
 C:\Users\fmExtreme\source\repos\alphaWriter\alphaWriter\obj\Debug\net10.0-android\stamp\_GenerateJavaStubs.stamp
 C:\Users\fmExtreme\source\repos\alphaWriter\alphaWriter\obj\Debug\net10.0-android\stamp\_GeneratePackageManagerJava.stamp
 C:\Users\fmExtreme\source\repos\alphaWriter\alphaWriter\obj\Debug\net10.0-android\stamp\_ResolveLibraryProjectImports.stamp
+C:\Users\fmExtreme\source\repos\alphaWriter\alphaWriter\obj\Debug\net10.0-android\alphaWriter.sourcelink.json
+C:\Users\fmExtreme\source\repos\alphaWriter\alphaWriter\obj\Debug\net10.0-android\assets\entity-report.html
+C:\Users\fmExtreme\source\repos\alphaWriter\alphaWriter\obj\Debug\net10.0-android\assets\vis-network.min.js

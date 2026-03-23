@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <IsTestProject>true</IsTestProject>
+    <!-- UseMaui is intentionally omitted — Microsoft.Maui.Controls is referenced
+         explicitly below.  Using UseMaui=true causes the resizetizer to conflict
+         with the referenced main project's app-icon assets. -->
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>alphaWriter.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.0.1">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Maui.Controls" Version="10.0.20">
+      <!-- Exclude build targets (resizetizer) — we only need the type DLLs. -->
+      <ExcludeAssets>build;buildMultitargeting;buildTransitive</ExcludeAssets>
+    </PackageReference>
+    <PackageReference Include="Moq" Version="4.20.72" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\alphaWriter\alphaWriter.csproj">
+      <!-- Prevent the main project's MAUI resizetizer build targets from
+           flowing into the test project (avoids duplicate icon errors). -->
+      <ExcludeAssets>build;buildMultitargeting;buildTransitive</ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+</Project>

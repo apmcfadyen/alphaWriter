@@ -317,3 +317,4 @@ C:\Users\fmExtreme\source\repos\alphaWriter\alphaWriter\obj\Debug\net10.0-ios\io
 C:\Users\fmExtreme\source\repos\alphaWriter\alphaWriter\obj\Debug\net10.0-ios\iossimulator-x64\alphaWriter.pdb
 C:\Users\fmExtreme\source\repos\alphaWriter\alphaWriter\obj\Debug\net10.0-ios\iossimulator-x64\alphaWriter.genruntimeconfig.cache
 C:\Users\fmExtreme\source\repos\alphaWriter\alphaWriter\obj\Debug\net10.0-ios\iossimulator-x64\ref\alphaWriter.dll
+C:\Users\fmExtreme\source\repos\alphaWriter\alphaWriter\obj\Debug\net10.0-ios\iossimulator-x64\alphaWriter.sourcelink.json

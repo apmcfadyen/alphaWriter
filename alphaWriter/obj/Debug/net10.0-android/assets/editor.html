@@ -49,6 +49,11 @@
     color: #5A5A6A;
     font-style: italic;
   }
+
+  /* Entity highlights — display only, stripped before save */
+  .entity            { color: #A89EC9; text-decoration: underline; cursor: pointer; }
+  .entity-location   { color: #7EC8A4; }
+  .entity-item       { color: #C8B07A; }
 </style>
 </head>
 <body>
@@ -68,16 +73,20 @@
   var _rawContent = '';
   var _wordCount = 0;
 
+  // Entity manifest pushed from C# via setEntities().
+  // Each entry: { id, type, terms: [...sorted longest-first] }
+  var _entities = [];
+
   // ── Content API ─────────────────────────────────────────────────────────────
 
   function setContent(rawHtml) {
-    // Cancel any pending timers from the previous scene to prevent stale
-    // notifications from overwriting content on the wrong scene.
     clearTimeout(_notifyTimer);
     clearTimeout(_highlightTimer);
     _rawContent = rawHtml || '';
     _wordCount = computeWordCount(_rawContent);
-    document.getElementById('editor').innerHTML = applyCommentHighlighting(_rawContent);
+    var highlighted = applyCommentHighlighting(_rawContent);
+    highlighted = applyEntityHighlighting(highlighted);
+    document.getElementById('editor').innerHTML = highlighted;
     _ready = true;
   }
 
@@ -87,7 +96,7 @@
   function flushContent() {
     clearTimeout(_notifyTimer);
     clearTimeout(_highlightTimer);
-    _rawContent = stripCommentSpans(document.getElementById('editor').innerHTML);
+    _rawContent = stripAllVisualSpans(document.getElementById('editor').innerHTML);
     _wordCount = computeWordCount(_rawContent);
   }
 
@@ -113,6 +122,23 @@
 
   function getWordCount() {
     return _wordCount;
+  }
+
+  // Atomic flush-and-return: combines flushContent + getContent + getWordCount
+  // into a single call so C# needs only one EvaluateJavaScriptAsync round-trip.
+  function flushAndGet() {
+    flushContent();
+    return JSON.stringify({ content: _rawContent, wordCount: _wordCount });
+  }
+
+  // ── Visual span stripping ────────────────────────────────────────────────────
+  // Removes ALL display-only spans (comments + entities) to recover clean raw HTML.
+
+  function stripAllVisualSpans(html) {
+    // Strip inner (entity) spans first so outer (comment) spans have no nested </span>
+    html = html.replace(/<span class="entity[^"]*"[^>]*>([\s\S]*?)<\/span>/gi, '$1');
+    html = html.replace(/<span class="comment">([\s\S]*?)<\/span>/gi, '$1');
+    return html;
   }
 
   // ── Comment highlighting ─────────────────────────────────────────────────────
@@ -206,9 +232,100 @@
     return result;
   }
 
-  // Removes <span class="comment">…</span> wrappers, keeping inner text/markup.
-  function stripCommentSpans(html) {
-    return html.replace(/<span class="comment">([\s\S]*?)<\/span>/gi, '$1');
+  // ── Entity highlighting ──────────────────────────────────────────────────────
+  // Walks text segments between HTML tags, matches entity names/aliases,
+  // wraps matches in entity spans. Never touches tag attributes or existing spans.
+
+  function setEntities(arr) {
+    try {
+      _entities = (arr || []).map(function(e) {
+        var terms = [e.name].concat(e.aliases || [])
+          .filter(function(t) { return t && t.trim().length > 0; });
+        // Sort longest-first so "John Smith" is matched before "John"
+        terms.sort(function(a, b) { return b.length - a.length; });
+        return { id: e.id, type: e.type, terms: terms };
+      }).filter(function(e) { return e.terms.length > 0; });
+    } catch(err) {
+      _entities = [];
+    }
+    // Refresh highlighting if a scene is already loaded. Wrapped in try-catch
+    // so a DOM/caret error during refresh never kills the setEntities call and
+    // never prevents _entities from being visible to subsequent setContent calls.
+    if (_ready) {
+      try { refreshHighlighting(); } catch(e) {}
+    }
+    return _entities.length;
+  }
+
+  function applyEntityHighlighting(html) {
+    if (_entities.length === 0) return html;
+    var result = '';
+    var i = 0;
+    while (i < html.length) {
+      // Pass HTML tags through unchanged
+      if (html[i] === '<') {
+        var end = html.indexOf('>', i);
+        if (end === -1) { result += html.slice(i); break; }
+        result += html.slice(i, end + 1);
+        i = end + 1;
+        continue;
+      }
+      // Pass HTML entities through intact
+      if (html[i] === '&') {
+        var semi = html.indexOf(';', i);
+        if (semi !== -1 && semi - i <= 8) {
+          result += html.slice(i, semi + 1);
+          i = semi + 1;
+          continue;
+        }
+      }
+      // Collect a plain-text segment up to the next tag
+      var segEnd = html.indexOf('<', i);
+      if (segEnd === -1) segEnd = html.length;
+      result += matchEntitiesInSegment(html.slice(i, segEnd));
+      i = segEnd;
+    }
+    return result;
+  }
+
+  function matchEntitiesInSegment(text) {
+    var spans = [];
+    for (var ei = 0; ei < _entities.length; ei++) {
+      var entity = _entities[ei];
+      for (var ti = 0; ti < entity.terms.length; ti++) {
+        var term = entity.terms[ti];
+        var escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        var pattern = new RegExp(escaped, 'gi');
+        var m;
+        while ((m = pattern.exec(text)) !== null) {
+          var s = m.index;
+          var e = s + m[0].length;
+          // Word boundary: char before/after must not be a word character
+          var before = s > 0 ? text[s - 1] : ' ';
+          var after  = e < text.length ? text[e] : ' ';
+          if (/\w/.test(before) || /\w/.test(after)) continue;
+          // Reject if overlaps an already-claimed span
+          var overlaps = false;
+          for (var si = 0; si < spans.length; si++) {
+            if (!(e <= spans[si].s || s >= spans[si].e)) { overlaps = true; break; }
+          }
+          if (!overlaps)
+            spans.push({ s: s, e: e, id: entity.id, type: entity.type, matched: m[0] });
+        }
+      }
+    }
+    if (spans.length === 0) return text;
+    spans.sort(function(a, b) { return a.s - b.s; });
+    var out = '';
+    var pos = 0;
+    for (var si = 0; si < spans.length; si++) {
+      var sp = spans[si];
+      out += text.slice(pos, sp.s);
+      out += '<span class="entity entity-' + sp.type + '" data-id="' + sp.id
+           + '" data-type="' + sp.type + '">' + sp.matched + '</span>';
+      pos = sp.e;
+    }
+    return out + text.slice(pos);
   }
 
   // ── Cursor save / restore ────────────────────────────────────────────────────
@@ -305,8 +422,10 @@
   function refreshHighlighting() {
     var editor = document.getElementById('editor');
     var pos = getCaretOffset(editor);
-    var raw = stripCommentSpans(editor.innerHTML);
-    editor.innerHTML = applyCommentHighlighting(raw);
+    var raw = stripAllVisualSpans(editor.innerHTML);
+    var highlighted = applyCommentHighlighting(raw);
+    highlighted = applyEntityHighlighting(highlighted);
+    editor.innerHTML = highlighted;
     setCaretOffset(editor, pos);
   }
 
@@ -330,10 +449,13 @@
     clearTimeout(_notifyTimer);
     clearTimeout(_highlightTimer);
 
+    // Capture raw content immediately on every input so _rawContent is always
+    // current.  This ensures getContent() returns the latest text even if C#
+    // calls flushContent()+getContent() before the 800ms debounce fires.
+    _rawContent = stripAllVisualSpans(document.getElementById('editor').innerHTML);
+    _wordCount = computeWordCount(_rawContent);
+
     _notifyTimer = setTimeout(function() {
-      // Capture raw content BEFORE any DOM modification
-      _rawContent = stripCommentSpans(document.getElementById('editor').innerHTML);
-      _wordCount = computeWordCount(_rawContent);
       // Notify C# — unique URL forces a fresh Navigating event every time
       window.location.href = 'alphawriter://contentChanged?t=' + Date.now();
       // Apply visual highlighting shortly after (non-blocking for C# retrieval)
@@ -348,6 +470,24 @@
     e.preventDefault();
     var text = (e.clipboardData || window.clipboardData).getData('text/plain');
     document.execCommand('insertText', false, text);
+  });
+
+  // Entity click → notify C# with entity id and type
+  document.getElementById('editor').addEventListener('click', function(e) {
+    var t = e.target;
+    while (t && t !== this) {
+      if (t.classList && t.classList.contains('entity')) {
+        e.preventDefault();
+        var id   = t.getAttribute('data-id');
+        var type = t.getAttribute('data-type');
+        if (id && type) {
+          window.location.href = 'alphawriter://entityClicked?id='
+            + encodeURIComponent(id) + '&type=' + encodeURIComponent(type);
+        }
+        return;
+      }
+      t = t.parentElement;
+    }
   });
 </script>
 </body>
