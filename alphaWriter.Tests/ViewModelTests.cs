@@ -1,5 +1,7 @@
 using alphaWriter.Models;
+using alphaWriter.Models.Analysis;
 using alphaWriter.Services;
+using alphaWriter.Services.Nlp;
 using alphaWriter.ViewModels;
 using Moq;
 using System.Collections.ObjectModel;
@@ -30,7 +32,10 @@ public class ViewModelTests
             .Returns(Task.CompletedTask);
 
         var imageServiceMock = new Mock<IImageService>();
-        return new WriterViewModel(bookServiceMock.Object, imageServiceMock.Object);
+        var nlpServiceMock = new Mock<INlpAnalysisService>();
+        var modelManagerMock = new Mock<INlpModelManager>();
+        return new WriterViewModel(bookServiceMock.Object, imageServiceMock.Object,
+            nlpServiceMock.Object, modelManagerMock.Object);
     }
 
     /// <summary>
@@ -421,5 +426,116 @@ public class ViewModelTests
         Assert.False(vm.IsCharactersMode);
         Assert.False(vm.IsLocationsMode);
         Assert.False(vm.IsItemsMode);
+    }
+
+    // ── Note filtering ───────────────────────────────────────────────────────
+
+    private static void SetupAnalysisResults(WriterViewModel vm)
+    {
+        var notes = new List<NlpNote>
+        {
+            new() { Severity = NlpNoteSeverity.Issue, Category = NlpNoteCategory.Style, Message = "Style issue", ChapterTitle = "Ch1", SceneTitle = "S1" },
+            new() { Severity = NlpNoteSeverity.Warning, Category = NlpNoteCategory.Pacing, Message = "Pacing warning", ChapterTitle = "Ch1", SceneTitle = "S1" },
+            new() { Severity = NlpNoteSeverity.Info, Category = NlpNoteCategory.Voice, Message = "Voice info", ChapterTitle = "Ch1", SceneTitle = "S2" },
+            new() { Severity = NlpNoteSeverity.Warning, Category = NlpNoteCategory.Emotion, Message = "Emotion warning", ChapterTitle = "Ch2", SceneTitle = "S3" },
+            new() { Severity = NlpNoteSeverity.Info, Category = NlpNoteCategory.Style, Message = "Style info", ChapterTitle = "Ch2", SceneTitle = "S4" },
+        };
+
+        // Set the private _allNotes and _analysisResults fields
+        var allNotesField = typeof(WriterViewModel).GetField("_allNotes", BindingFlags.NonPublic | BindingFlags.Instance);
+        allNotesField!.SetValue(vm, notes);
+
+        var resultsField = typeof(WriterViewModel).GetField("_analysisResults", BindingFlags.NonPublic | BindingFlags.Instance);
+        resultsField!.SetValue(vm, new List<SceneAnalysisResult> { new() { SceneId = "s1", SceneTitle = "S1" } });
+    }
+
+    [Fact]
+    public void NoteFilter_AllCategories_ShowsAllNotes()
+    {
+        var vm = CreateViewModel(out _);
+        SetupAnalysisResults(vm);
+
+        // Toggle to a non-default value first so the change handler fires when set back
+        vm.SelectedCategoryFilter = "Style";
+        vm.SelectedCategoryFilter = "All";
+
+        Assert.Equal(5, vm.NlpNotes.Count);
+    }
+
+    [Fact]
+    public void NoteFilter_ByCategoryStyle_FiltersCorrectly()
+    {
+        var vm = CreateViewModel(out _);
+        SetupAnalysisResults(vm);
+
+        vm.SelectedCategoryFilter = "Style";
+
+        Assert.Equal(2, vm.NlpNotes.Count);
+        Assert.All(vm.NlpNotes, n => Assert.Equal(NlpNoteCategory.Style, n.Category));
+    }
+
+    [Fact]
+    public void NoteFilter_BySeverityWarning_FiltersCorrectly()
+    {
+        var vm = CreateViewModel(out _);
+        SetupAnalysisResults(vm);
+
+        vm.SelectedSeverityFilter = "Warning";
+
+        Assert.Equal(2, vm.NlpNotes.Count);
+        Assert.All(vm.NlpNotes, n => Assert.Equal(NlpNoteSeverity.Warning, n.Severity));
+    }
+
+    [Fact]
+    public void NoteFilter_ByCategoryAndSeverity_CombinesFilters()
+    {
+        var vm = CreateViewModel(out _);
+        SetupAnalysisResults(vm);
+
+        vm.SelectedCategoryFilter = "Style";
+        vm.SelectedSeverityFilter = "Issue";
+
+        Assert.Single(vm.NlpNotes);
+        Assert.Equal("Style issue", vm.NlpNotes[0].Message);
+    }
+
+    [Fact]
+    public void NoteFilter_SortsByIssueSeverityFirst()
+    {
+        var vm = CreateViewModel(out _);
+        SetupAnalysisResults(vm);
+
+        // Trigger filter by toggling category
+        vm.SelectedCategoryFilter = "Style";
+        vm.SelectedCategoryFilter = "All";
+
+        // Issue should come first, then Warning, then Info
+        Assert.Equal(5, vm.NlpNotes.Count);
+        Assert.Equal(NlpNoteSeverity.Issue, vm.NlpNotes[0].Severity);
+        Assert.True(vm.NlpNotes.Take(1).All(n => n.Severity == NlpNoteSeverity.Issue));
+        Assert.True(vm.NlpNotes.Skip(1).Take(2).All(n => n.Severity == NlpNoteSeverity.Warning));
+        Assert.True(vm.NlpNotes.Skip(3).All(n => n.Severity == NlpNoteSeverity.Info));
+    }
+
+    [Fact]
+    public void ClearAnalysis_ResetsAllAnalysisState()
+    {
+        var vm = CreateViewModel(out _);
+        SetupAnalysisResults(vm);
+
+        // Trigger filter to populate NlpNotes
+        vm.SelectedCategoryFilter = "Style";
+        vm.SelectedCategoryFilter = "All";
+        Assert.True(vm.NlpNotes.Count > 0);
+        Assert.True(vm.HasAnalysisResults);
+
+        // Clear
+        vm.ClearAnalysisCommand.Execute(null);
+
+        Assert.Empty(vm.NlpNotes);
+        Assert.False(vm.HasAnalysisResults);
+        Assert.Equal("All", vm.SelectedCategoryFilter);
+        Assert.Equal("All", vm.SelectedSeverityFilter);
+        Assert.Equal("", vm.AnalysisProgress);
     }
 }

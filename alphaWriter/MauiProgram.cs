@@ -1,4 +1,5 @@
 using alphaWriter.Services;
+using alphaWriter.Services.Nlp;
 using alphaWriter.ViewModels;
 using alphaWriter.Views;
 using Microsoft.Extensions.Logging;
@@ -21,6 +22,23 @@ namespace alphaWriter
             // Services
             builder.Services.AddSingleton<IBookService, BookService>();
             builder.Services.AddSingleton<IImageService, ImageService>();
+
+            // NLP Services
+            builder.Services.AddSingleton<IStyleAnalyzer, StyleAnalyzer>();
+            builder.Services.AddSingleton<IPacingAnalyzer, PacingAnalyzer>();
+            builder.Services.AddSingleton<INlpModelManager, NlpModelManager>();
+            builder.Services.AddSingleton<IEmbeddingService, EmbeddingService>();
+            builder.Services.AddSingleton<IEmotionService, EmotionService>();
+            builder.Services.AddSingleton<ICharacterVoiceAnalyzer, CharacterVoiceAnalyzer>();
+            builder.Services.AddSingleton<INlpCacheService, NlpCacheService>();
+            builder.Services.AddSingleton<INlpAnalysisService>(sp =>
+                new NlpAnalysisService(
+                    sp.GetRequiredService<IStyleAnalyzer>(),
+                    sp.GetRequiredService<IPacingAnalyzer>(),
+                    sp.GetRequiredService<IEmbeddingService>(),
+                    sp.GetRequiredService<INlpModelManager>(),
+                    sp.GetRequiredService<IEmotionService>(),
+                    sp.GetRequiredService<ICharacterVoiceAnalyzer>()));
 
             // ViewModels
             builder.Services.AddSingleton<WriterViewModel>();

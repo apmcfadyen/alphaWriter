@@ -1,5 +1,7 @@
 using alphaWriter.Models;
+using alphaWriter.Models.Analysis;
 using alphaWriter.Services;
+using alphaWriter.Services.Nlp;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using System.Collections.ObjectModel;
@@ -11,16 +13,24 @@ namespace alphaWriter.ViewModels
     {
         private readonly IBookService _bookService;
         private readonly IImageService _imageService;
+        private readonly INlpAnalysisService _nlpAnalysisService;
+        private readonly INlpModelManager _modelManager;
         private System.Threading.Timer? _saveTimer;
         private bool _initialized;
+        private CancellationTokenSource? _analysisCts;
+        private List<Models.Analysis.SceneAnalysisResult>? _analysisResults;
+        private List<NlpNote> _allNotes = [];
 
         // Raised when the selected scene changes so the page can update the WebView
         public event Action<Scene?>? SelectedSceneChanged;
 
-        public WriterViewModel(IBookService bookService, IImageService imageService)
+        public WriterViewModel(IBookService bookService, IImageService imageService,
+            INlpAnalysisService nlpAnalysisService, INlpModelManager modelManager)
         {
             _bookService = bookService;
             _imageService = imageService;
+            _nlpAnalysisService = nlpAnalysisService;
+            _modelManager = modelManager;
         }
 
         [ObservableProperty]
@@ -91,6 +101,35 @@ namespace alphaWriter.ViewModels
 
         [ObservableProperty]
         private ObservableCollection<DailyProgressEntry> dailyProgressData = [];
+
+        [ObservableProperty]
+        private ObservableCollection<NlpNote> nlpNotes = [];
+
+        [ObservableProperty]
+        private string activeReportType = "Entities";
+
+        [ObservableProperty]
+        private bool isAnalyzing;
+
+        [ObservableProperty]
+        private bool isDownloadingModels;
+
+        [ObservableProperty]
+        private string analysisProgress = "";
+
+        [ObservableProperty]
+        private string selectedCategoryFilter = "All";
+
+        [ObservableProperty]
+        private string selectedSeverityFilter = "All";
+
+        public List<string> CategoryFilterOptions { get; } =
+            ["All", "Voice", "Emotion", "Pacing", "Style", "Structure"];
+
+        public List<string> SeverityFilterOptions { get; } =
+            ["All", "Issue", "Warning", "Info"];
+
+        public bool AreModelsAvailable => _modelManager.AreModelsAvailable;
 
         [ObservableProperty]
         private bool isEntityPreviewVisible;
@@ -164,6 +203,13 @@ namespace alphaWriter.ViewModels
             OnPropertyChanged(nameof(HasSelectedBook));
             OnPropertyChanged(nameof(CurrentBookTitle));
 
+            // Clear stale analysis data from the previous book
+            _allNotes = [];
+            _analysisResults = null;
+            NlpNotes = [];
+            AnalysisProgress = "";
+            OnPropertyChanged(nameof(HasAnalysisResults));
+
             // Persist last-opened book across sessions
             Preferences.Default.Set("lastBookId", value?.Id ?? string.Empty);
         }
@@ -193,12 +239,17 @@ namespace alphaWriter.ViewModels
             OnPropertyChanged(nameof(IsProblemsTab));
             OnPropertyChanged(nameof(IsCharactersTab));
             OnPropertyChanged(nameof(IsDailyProgressTab));
+            OnPropertyChanged(nameof(IsAnalysisTab));
         }
+
+        partial void OnSelectedCategoryFilterChanged(string value) => ApplyNoteFilters();
+        partial void OnSelectedSeverityFilterChanged(string value) => ApplyNoteFilters();
 
         public bool IsFrequencyTab     => ActiveStatsTab == "Frequency";
         public bool IsProblemsTab      => ActiveStatsTab == "Problems";
         public bool IsCharactersTab    => ActiveStatsTab == "Characters";
         public bool IsDailyProgressTab => ActiveStatsTab == "DailyProgress";
+        public bool IsAnalysisTab      => ActiveStatsTab == "Analysis";
 
         partial void OnSelectedChapterChanged(Chapter? value)
         {
@@ -747,12 +798,137 @@ namespace alphaWriter.ViewModels
             ActiveStatsTab = tab;
         }
 
+        [RelayCommand]
+        private async Task RunAnalysis()
+        {
+            if (SelectedBook is null || IsAnalyzing) return;
+
+            _analysisCts?.Cancel();
+            _analysisCts = new CancellationTokenSource();
+            var ct = _analysisCts.Token;
+
+            IsAnalyzing = true;
+            AnalysisProgress = "Starting analysis...";
+
+            try
+            {
+                var progress = new Progress<string>(msg => AnalysisProgress = msg);
+                var (notes, results) = await _nlpAnalysisService.AnalyzeBookAsync(SelectedBook, progress, ct);
+                _analysisResults = results;
+                _allNotes = notes;
+                SelectedCategoryFilter = "All";
+                SelectedSeverityFilter = "All";
+                ApplyNoteFilters();
+                AnalysisProgress = $"Found {notes.Count} note{(notes.Count == 1 ? "" : "s")}.";
+                ActiveStatsTab = "Analysis";
+                OnPropertyChanged(nameof(HasAnalysisResults));
+
+                // Populate inline scene analysis badges
+                PopulateSceneNoteCounts(notes);
+            }
+            catch (OperationCanceledException)
+            {
+                AnalysisProgress = "Analysis cancelled.";
+            }
+            finally
+            {
+                IsAnalyzing = false;
+            }
+        }
+
+        [RelayCommand]
+        private void CancelAnalysis()
+        {
+            _analysisCts?.Cancel();
+        }
+
+        [RelayCommand]
+        private void ClearAnalysis()
+        {
+            _allNotes = [];
+            _analysisResults = null;
+            NlpNotes = [];
+            AnalysisProgress = "";
+            SelectedCategoryFilter = "All";
+            SelectedSeverityFilter = "All";
+            OnPropertyChanged(nameof(HasAnalysisResults));
+            ClearSceneNoteCounts();
+        }
+
+        private void ApplyNoteFilters()
+        {
+            if (_allNotes.Count == 0)
+            {
+                NlpNotes = [];
+                return;
+            }
+
+            IEnumerable<NlpNote> filtered = _allNotes;
+
+            if (SelectedCategoryFilter != "All"
+                && Enum.TryParse<NlpNoteCategory>(SelectedCategoryFilter, out var category))
+            {
+                filtered = filtered.Where(n => n.Category == category);
+            }
+
+            if (SelectedSeverityFilter != "All"
+                && Enum.TryParse<NlpNoteSeverity>(SelectedSeverityFilter, out var severity))
+            {
+                filtered = filtered.Where(n => n.Severity == severity);
+            }
+
+            // Sort: Issue first, then Warning, then Info
+            var sorted = filtered.OrderBy(n => n.Severity switch
+            {
+                NlpNoteSeverity.Issue => 0,
+                NlpNoteSeverity.Warning => 1,
+                _ => 2
+            }).ThenBy(n => n.ChapterTitle)
+              .ThenBy(n => n.SceneTitle);
+
+            NlpNotes = new ObservableCollection<NlpNote>(sorted);
+        }
+
+        private void ClearSceneNoteCounts()
+        {
+            if (SelectedBook is null) return;
+            foreach (var chapter in SelectedBook.Chapters)
+                foreach (var scene in chapter.Scenes)
+                    scene.AnalysisNoteCount = 0;
+        }
+
+        [RelayCommand]
+        private async Task DownloadModels()
+        {
+            if (IsDownloadingModels) return;
+            IsDownloadingModels = true;
+            AnalysisProgress = "Downloading models...";
+
+            try
+            {
+                var progress = new Progress<(string model, double percent)>(p =>
+                    AnalysisProgress = $"Downloading {p.model}... {p.percent:F0}%");
+                await _modelManager.DownloadModelsAsync(progress);
+                AnalysisProgress = "Models downloaded successfully.";
+                OnPropertyChanged(nameof(AreModelsAvailable));
+            }
+            catch (Exception ex)
+            {
+                AnalysisProgress = $"Download failed: {ex.Message}";
+            }
+            finally
+            {
+                IsDownloadingModels = false;
+            }
+        }
+
         // ── Reports ──────────────────────────────────────────────────────────
 
         [RelayCommand]
         private void ShowReports()
         {
             if (SelectedBook is null) return;
+            ActiveReportType = "Entities";
             SelectedCharacter = null;
             SelectedLocation = null;
             SelectedItem = null;
@@ -762,9 +938,110 @@ namespace alphaWriter.ViewModels
         }
 
         [RelayCommand]
+        private void ShowNlpReport()
+        {
+            if (SelectedBook is null || _analysisResults is null || _analysisResults.Count == 0) return;
+            ActiveReportType = "NLP";
+            SelectedCharacter = null;
+            SelectedLocation = null;
+            SelectedItem = null;
+            IsBookInfoVisible = false;
+            IsStatsPanelVisible = false;
+            IsReportsPanelVisible = true;
+        }
+
+        [RelayCommand]
+        private void SwitchReportType(string reportType)
+        {
+            if (reportType == ActiveReportType) return;
+            ActiveReportType = reportType;
+            ReportsPanelShown?.Invoke();
+        }
+
+        [RelayCommand]
         private void CloseReports()
         {
             IsReportsPanelVisible = false;
+        }
+
+        public bool HasAnalysisResults => _analysisResults is not null && _analysisResults.Count > 0;
+
+        private void PopulateSceneNoteCounts(List<NlpNote> notes)
+        {
+            if (SelectedBook is null) return;
+
+            // Build a lookup: sceneId -> count
+            var countByScene = notes
+                .Where(n => !string.IsNullOrEmpty(n.SceneId))
+                .GroupBy(n => n.SceneId)
+                .ToDictionary(g => g.Key, g => g.Count());
+
+            foreach (var chapter in SelectedBook.Chapters)
+            {
+                foreach (var scene in chapter.Scenes)
+                {
+                    scene.AnalysisNoteCount = countByScene.GetValueOrDefault(scene.Id, 0);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Builds a JSON string with all analysis data needed by the NLP report HTML.
+        /// </summary>
+        public string BuildNlpReportJson()
+        {
+            if (_analysisResults is null || _analysisResults.Count == 0)
+                return "{}";
+
+            var scenes = _analysisResults.Select(r => new
+            {
+                title = r.SceneTitle,
+                chapter = r.ChapterTitle,
+                wordCount = r.Style.TotalWords,
+                sentenceCount = r.Style.TotalSentences,
+                avgSentenceLength = Math.Round(r.Style.AverageSentenceLength, 1),
+                vocabRichness = Math.Round(r.Style.VocabularyRichness, 3),
+                contractionRate = Math.Round(r.Style.ContractionRate, 3),
+                dialogueRatio = Math.Round(r.Style.DialogueRatio, 3),
+                chapterSimilarity = Math.Round(r.ChapterSimilarity, 3),
+                noteCount = r.Notes.Count,
+                emotions = AggregateSceneEmotions(r)
+            }).ToList();
+
+            var notes = NlpNotes.Select(n => new
+            {
+                severity = n.Severity.ToString().ToLower(),
+                category = n.CategoryLabel.ToLower(),
+                scene = n.SceneTitle,
+                chapter = n.ChapterTitle,
+                message = n.Message
+            }).ToList();
+
+            return System.Text.Json.JsonSerializer.Serialize(
+                new { scenes, notes },
+                new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase });
+        }
+
+        private static object? AggregateSceneEmotions(Models.Analysis.SceneAnalysisResult result)
+        {
+            var allEmotions = result.Sentences
+                .Where(s => s.Emotions.Count > 0)
+                .SelectMany(s => s.Emotions)
+                .ToList();
+
+            if (allEmotions.Count == 0) return null;
+
+            var clusters = new Dictionary<string, double>();
+            foreach (var (label, conf) in allEmotions)
+            {
+                var cluster = label.ToCluster().ToString().ToLower();
+                clusters[cluster] = clusters.GetValueOrDefault(cluster) + conf;
+            }
+
+            var total = clusters.Values.Sum();
+            if (total <= 0) return null;
+
+            return clusters.ToDictionary(kv => kv.Key, kv => Math.Round(kv.Value / total, 3));
         }
 
         /// <summary>

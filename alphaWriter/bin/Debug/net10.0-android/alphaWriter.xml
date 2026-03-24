@@ -4,6 +4,16 @@
         <name>alphaWriter</name>
     </assembly>
     <members>
+        <member name="T:alphaWriter.Models.Analysis.EmotionLabel">
+            <summary>
+            The 28 GoEmotions fine-grained emotion labels from SamLowe/roberta-base-go_emotions.
+            </summary>
+        </member>
+        <member name="T:alphaWriter.Models.Analysis.EmotionCluster">
+            <summary>
+            Seven macro-categories that group the 28 GoEmotions labels for high-level reporting.
+            </summary>
+        </member>
         <member name="P:alphaWriter.Models.Book.DailyWordSnapshots">
             <summary>
             Keyed by "yyyy-MM-dd". Value is the book's total word count at the end of that day's session.
@@ -14,6 +24,63 @@
             <summary>
             Returns all words from the scene's HTML content as lowercase strings,
             with HTML, comments, and entities stripped. Used for statistics.
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Services.Nlp.IEmbeddingService.UnloadModel">
+            <summary>
+            Releases the ONNX session and tokenizer to free memory.
+            The model can be reloaded with LoadModelAsync.
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Services.Nlp.IEmotionService.ClassifyBatch(System.Collections.Generic.IReadOnlyList{System.String})">
+            <summary>
+            Classifies multiple sentences in a single batched ONNX forward pass.
+            Returns one result list per input text. Much faster than calling
+            ClassifySentence in a loop for large scene analysis.
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Services.Nlp.IEmotionService.UnloadModel">
+            <summary>
+            Releases the ONNX session and tokenizer to free memory.
+            The model can be reloaded with LoadModelAsync.
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Services.Nlp.NlpAnalysisService.ClassifyEmotionsBatched(alphaWriter.Models.Analysis.SceneAnalysisResult,System.Threading.CancellationToken)">
+            <summary>
+            Classifies emotions for all sentences in a scene using batched inference.
+            Much faster than per-sentence calls for scenes with many sentences.
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Services.Nlp.NlpTextExtractor.ExtractPlainText(System.String)">
+            <summary>
+            Converts scene HTML content to plain text, reusing Scene's existing pipeline.
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Services.Nlp.NlpTextExtractor.SplitSentences(System.String)">
+            <summary>
+            Splits plain text into sentences. Handles abbreviations, quoted dialogue,
+            ellipsis, and other common patterns in creative writing.
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Services.Nlp.NlpTextExtractor.SplitParagraphs(System.String)">
+            <summary>
+            Splits plain text into paragraphs (by newline boundaries).
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Services.Nlp.NlpTextExtractor.EndsWithAbbreviation(System.String)">
+            <summary>
+            Checks whether text ends with a known abbreviation followed by a period.
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Services.Nlp.NlpTextExtractor.IsDialogue(System.String)">
+            <summary>
+            Detects whether a sentence is dialogue (starts/ends with quotes or
+            contains a dialogue attribution pattern).
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Services.Nlp.NlpTextExtractor.HasContraction(System.String)">
+            <summary>
+            Detects whether a sentence contains a contraction (e.g., don't, I'm, we've).
             </summary>
         </member>
         <member name="T:alphaWriter.ViewModels.SceneEntityOption">
@@ -45,6 +112,12 @@
             <inheritdoc cref="F:alphaWriter.ViewModels.ViewpointOption.isSelected"/>
         </member>
         <member name="T:alphaWriter.ViewModels.WriterViewModel">
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
             <inheritdoc/>
             <inheritdoc/>
             <inheritdoc/>
@@ -115,6 +188,11 @@
             Returns true when <paramref name="name"/> or any alias in
             <paramref name="aka"/> appears as a whole word in the scene HTML
             (case-insensitive, HTML tags stripped before matching).
+            </summary>
+        </member>
+        <member name="M:alphaWriter.ViewModels.WriterViewModel.BuildNlpReportJson">
+            <summary>
+            Builds a JSON string with all analysis data needed by the NLP report HTML.
             </summary>
         </member>
         <member name="M:alphaWriter.ViewModels.WriterViewModel.BuildEntityRelationshipJson">
@@ -194,6 +272,27 @@
         <member name="P:alphaWriter.ViewModels.WriterViewModel.DailyProgressData">
             <inheritdoc cref="F:alphaWriter.ViewModels.WriterViewModel.dailyProgressData"/>
         </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.NlpNotes">
+            <inheritdoc cref="F:alphaWriter.ViewModels.WriterViewModel.nlpNotes"/>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.ActiveReportType">
+            <inheritdoc cref="F:alphaWriter.ViewModels.WriterViewModel.activeReportType"/>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.IsAnalyzing">
+            <inheritdoc cref="F:alphaWriter.ViewModels.WriterViewModel.isAnalyzing"/>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.IsDownloadingModels">
+            <inheritdoc cref="F:alphaWriter.ViewModels.WriterViewModel.isDownloadingModels"/>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.AnalysisProgress">
+            <inheritdoc cref="F:alphaWriter.ViewModels.WriterViewModel.analysisProgress"/>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.SelectedCategoryFilter">
+            <inheritdoc cref="F:alphaWriter.ViewModels.WriterViewModel.selectedCategoryFilter"/>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.SelectedSeverityFilter">
+            <inheritdoc cref="F:alphaWriter.ViewModels.WriterViewModel.selectedSeverityFilter"/>
+        </member>
         <member name="P:alphaWriter.ViewModels.WriterViewModel.IsEntityPreviewVisible">
             <inheritdoc cref="F:alphaWriter.ViewModels.WriterViewModel.isEntityPreviewVisible"/>
         </member>
@@ -254,6 +353,16 @@
             <summary>Executes the logic for when <see cref="P:alphaWriter.ViewModels.WriterViewModel.ActiveStatsTab"/> just changed.</summary>
             <param name="value">The new property value that was set.</param>
             <remarks>This method is invoked right after the value of <see cref="P:alphaWriter.ViewModels.WriterViewModel.ActiveStatsTab"/> is changed.</remarks>
+        </member>
+        <member name="M:alphaWriter.ViewModels.WriterViewModel.OnSelectedCategoryFilterChanged(System.String)">
+            <summary>Executes the logic for when <see cref="P:alphaWriter.ViewModels.WriterViewModel.SelectedCategoryFilter"/> just changed.</summary>
+            <param name="value">The new property value that was set.</param>
+            <remarks>This method is invoked right after the value of <see cref="P:alphaWriter.ViewModels.WriterViewModel.SelectedCategoryFilter"/> is changed.</remarks>
+        </member>
+        <member name="M:alphaWriter.ViewModels.WriterViewModel.OnSelectedSeverityFilterChanged(System.String)">
+            <summary>Executes the logic for when <see cref="P:alphaWriter.ViewModels.WriterViewModel.SelectedSeverityFilter"/> just changed.</summary>
+            <param name="value">The new property value that was set.</param>
+            <remarks>This method is invoked right after the value of <see cref="P:alphaWriter.ViewModels.WriterViewModel.SelectedSeverityFilter"/> is changed.</remarks>
         </member>
         <member name="F:alphaWriter.ViewModels.WriterViewModel.addBookCommand">
             <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.AddBookCommand"/>.</summary>
@@ -375,11 +484,47 @@
         <member name="P:alphaWriter.ViewModels.WriterViewModel.SetStatsTabCommand">
             <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IRelayCommand`1"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.SetStatsTab(System.String)"/>.</summary>
         </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.runAnalysisCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.RunAnalysisCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.RunAnalysisCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IAsyncRelayCommand"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.RunAnalysis"/>.</summary>
+        </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.cancelAnalysisCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.CancelAnalysisCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.CancelAnalysisCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IRelayCommand"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.CancelAnalysis"/>.</summary>
+        </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.clearAnalysisCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.ClearAnalysisCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.ClearAnalysisCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IRelayCommand"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.ClearAnalysis"/>.</summary>
+        </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.downloadModelsCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.DownloadModelsCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.DownloadModelsCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IAsyncRelayCommand"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.DownloadModels"/>.</summary>
+        </member>
         <member name="F:alphaWriter.ViewModels.WriterViewModel.showReportsCommand">
             <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.ShowReportsCommand"/>.</summary>
         </member>
         <member name="P:alphaWriter.ViewModels.WriterViewModel.ShowReportsCommand">
             <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IRelayCommand"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.ShowReports"/>.</summary>
+        </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.showNlpReportCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.ShowNlpReportCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.ShowNlpReportCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IRelayCommand"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.ShowNlpReport"/>.</summary>
+        </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.switchReportTypeCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.SwitchReportTypeCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.SwitchReportTypeCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IRelayCommand`1"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.SwitchReportType(System.String)"/>.</summary>
         </member>
         <member name="F:alphaWriter.ViewModels.WriterViewModel.closeReportsCommand">
             <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.CloseReportsCommand"/>.</summary>
@@ -483,11 +628,19 @@
             Called when entity names/aliases change (EntitiesChanged event).
             </summary>
         </member>
-        <member name="M:alphaWriter.Views.WriterPage.OnReportNavigating(System.Object,Microsoft.Maui.Controls.WebNavigatingEventArgs)">
+        <member name="M:alphaWriter.Views.WriterPage.BuildReportHtml(System.String,System.String)">
             <summary>
-            Intercepts <c>alphawriter://reportReady</c> from the JS in
-            entity-report.html — the definitive signal that vis.js loaded,
-            the network was initialised, and <c>setData()</c> is callable.
+            Builds a fully self-contained HTML document with vis-network JS
+            inlined and entity data embedded — nothing external, nothing cached.
+            Uses absolute positioning (not flexbox) so the canvas container has
+            rigid pixel dimensions that survive vis.js interaction redraws.
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Views.WriterPage.BuildNlpReportHtml(System.String)">
+            <summary>
+            Builds a self-contained NLP analysis report with SVG charts.
+            Includes: pacing heatmap, style consistency chart, emotion distribution,
+            and a categorized notes list.
             </summary>
         </member>
         <member name="T:alphaWriter.Resource">
@@ -577,6 +730,27 @@
         <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.DailyProgressData">
             <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "DailyProgressData" generated properties.</summary>
         </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.NlpNotes">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "NlpNotes" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.ActiveReportType">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "ActiveReportType" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.IsAnalyzing">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "IsAnalyzing" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.IsDownloadingModels">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "IsDownloadingModels" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.AnalysisProgress">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "AnalysisProgress" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.SelectedCategoryFilter">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "SelectedCategoryFilter" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.SelectedSeverityFilter">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "SelectedSeverityFilter" generated properties.</summary>
+        </member>
         <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.IsEntityPreviewVisible">
             <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "IsEntityPreviewVisible" generated properties.</summary>
         </member>
@@ -663,6 +837,27 @@
         </member>
         <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.DailyProgressData">
             <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "DailyProgressData" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.NlpNotes">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "NlpNotes" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.ActiveReportType">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "ActiveReportType" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.IsAnalyzing">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "IsAnalyzing" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.IsDownloadingModels">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "IsDownloadingModels" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.AnalysisProgress">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "AnalysisProgress" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.SelectedCategoryFilter">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "SelectedCategoryFilter" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.SelectedSeverityFilter">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "SelectedSeverityFilter" generated properties.</summary>
         </member>
         <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.IsEntityPreviewVisible">
             <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "IsEntityPreviewVisible" generated properties.</summary>

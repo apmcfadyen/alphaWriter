@@ -14,10 +14,11 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("alphaWriter")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0+bf85a85c61fb73c0b962c5351b808740f667b94c")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0+f45aeb2786711f67837cc98f08fae96b4e041fc5")]
 [assembly: System.Reflection.AssemblyProductAttribute("alphaWriter")]
 [assembly: System.Reflection.AssemblyTitleAttribute("alphaWriter")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("alphaWriter.Tests")]
 [assembly: System.Runtime.Versioning.TargetPlatformAttribute("iOS26.2")]
 [assembly: System.Runtime.Versioning.SupportedOSPlatformAttribute("iOS15.0")]
 

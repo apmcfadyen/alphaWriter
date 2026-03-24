@@ -1,4 +1,4 @@
 <Solution>
-  <Project Path="alphaWriter/alphaWriter.csproj" />
   <Project Path="alphaWriter.Tests/alphaWriter.Tests.csproj" />
+  <Project Path="alphaWriter/alphaWriter.csproj" />
 </Solution>

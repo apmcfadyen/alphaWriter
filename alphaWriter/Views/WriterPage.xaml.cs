@@ -234,23 +234,33 @@ namespace alphaWriter.Views
         {
             try
             {
-                // Cache the 490 KB vis-network library on first use
-                if (_cachedVisNetworkJs is null)
+                if (_viewModel.ActiveReportType == "NLP")
                 {
-                    using var stream = await FileSystem.OpenAppPackageFileAsync("vis-network.min.js");
-                    using var reader = new StreamReader(stream);
-                    _cachedVisNetworkJs = await reader.ReadToEndAsync();
+                    var dataJson = _viewModel.BuildNlpReportJson();
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[REPORT] LoadReportAsync NLP: dataJson length={dataJson.Length}");
+                    var html = BuildNlpReportHtml(dataJson);
+                    await MainThread.InvokeOnMainThreadAsync(() =>
+                        ReportWebView.Source = new HtmlWebViewSource { Html = html });
                 }
+                else
+                {
+                    // Cache the 490 KB vis-network library on first use
+                    if (_cachedVisNetworkJs is null)
+                    {
+                        using var stream = await FileSystem.OpenAppPackageFileAsync("vis-network.min.js");
+                        using var reader = new StreamReader(stream);
+                        _cachedVisNetworkJs = await reader.ReadToEndAsync();
+                    }
 
-                var dataJson = _viewModel.BuildEntityRelationshipJson();
-                System.Diagnostics.Debug.WriteLine(
-                    $"[REPORT] LoadReportAsync: dataJson length={dataJson.Length}, " +
-                    $"visJs length={_cachedVisNetworkJs.Length}");
-
-                var html = BuildReportHtml(_cachedVisNetworkJs, dataJson);
-
-                await MainThread.InvokeOnMainThreadAsync(() =>
-                    ReportWebView.Source = new HtmlWebViewSource { Html = html });
+                    var dataJson = _viewModel.BuildEntityRelationshipJson();
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[REPORT] LoadReportAsync Entities: dataJson length={dataJson.Length}, " +
+                        $"visJs length={_cachedVisNetworkJs.Length}");
+                    var html = BuildReportHtml(_cachedVisNetworkJs, dataJson);
+                    await MainThread.InvokeOnMainThreadAsync(() =>
+                        ReportWebView.Source = new HtmlWebViewSource { Html = html });
+                }
             }
             catch (Exception ex)
             {
@@ -428,6 +438,220 @@ function applyFilters(){
                  + "<script>" + visJs + "</" + "script>"
                  + "<script>" + appJs
                  + "initNetwork();setData(" + dataJson + ");"
+                 + "</" + "script></body></html>";
+        }
+
+        // ── NLP Report HTML ──────────────────────────────────────────────────
+        /// <summary>
+        /// Builds a self-contained NLP analysis report with SVG charts.
+        /// Includes: pacing heatmap, style consistency chart, emotion distribution,
+        /// and a categorized notes list.
+        /// </summary>
+        private static string BuildNlpReportHtml(string dataJson)
+        {
+            const string css = @"
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { width:100%; height:100%; overflow-y:auto; overflow-x:hidden;
+    background:#1E1E28; color:#E8E4DC;
+    font-family:'Segoe UI',system-ui,sans-serif; font-size:13px; }
+.container { padding:16px 20px 40px; max-width:1200px; margin:0 auto; }
+h2 { font-size:15px; font-weight:600; color:#A89EC9; margin:24px 0 12px; padding-bottom:6px;
+    border-bottom:1px solid #3A3A48; }
+h2:first-child { margin-top:0; }
+.chart-area { background:#22222A; border:1px solid #3A3A48; border-radius:6px;
+    padding:12px; margin-bottom:16px; overflow-x:auto; }
+.heatmap { display:flex; gap:2px; flex-wrap:wrap; align-items:flex-end; min-height:60px; }
+.hm-cell { min-width:28px; flex:1; border-radius:3px; position:relative;
+    cursor:default; transition:opacity .15s; }
+.hm-cell:hover { opacity:.8; }
+.hm-label { font-size:9px; color:#9E9AA0; text-align:center; margin-top:2px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:60px; }
+.bar-chart { display:flex; gap:3px; align-items:flex-end; height:120px; }
+.bar-col { display:flex; flex-direction:column; align-items:center; flex:1; min-width:20px; height:100%; justify-content:flex-end; }
+.bar { width:100%; border-radius:2px 2px 0 0; min-height:2px; transition:height .3s; }
+.bar-label { font-size:9px; color:#9E9AA0; margin-top:3px; text-align:center;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:60px; }
+.emotion-row { display:flex; gap:2px; height:18px; border-radius:3px; overflow:hidden; margin-bottom:3px; }
+.emotion-seg { height:100%; transition:width .3s; }
+.emotion-legend { display:flex; gap:12px; flex-wrap:wrap; margin-top:8px; }
+.legend-item { display:flex; align-items:center; gap:4px; font-size:11px; color:#9E9AA0; }
+.legend-dot { width:8px; height:8px; border-radius:50%; }
+.note-card { background:#22222A; border:1px solid #3A3A48; border-radius:6px;
+    padding:10px 12px; margin-bottom:6px; }
+.note-header { display:flex; align-items:center; gap:6px; margin-bottom:4px; }
+.note-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.note-cat { font-size:11px; color:#9E9AA0; }
+.note-msg { font-size:12px; color:#E8E4DC; line-height:1.5; }
+.empty-state { color:#5A5A6A; font-style:italic; text-align:center; padding:30px; }
+.tooltip { position:absolute; background:#2A2A35; border:1px solid #4A4A5C;
+    color:#E8E4DC; font-size:11px; border-radius:4px; padding:4px 8px;
+    pointer-events:none; z-index:10; white-space:nowrap;
+    box-shadow:0 4px 12px rgba(0,0,0,.5); display:none; }
+.stats-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:8px; margin-bottom:16px; }
+.stat-card { background:#22222A; border:1px solid #3A3A48; border-radius:6px; padding:10px 12px; }
+.stat-value { font-size:20px; font-weight:700; color:#A89EC9; }
+.stat-label { font-size:11px; color:#9E9AA0; margin-top:2px; }
+";
+
+            const string appJs = @"
+var _data = {};
+var EMOTION_COLORS = {
+    joy:'#61C88A', sadness:'#61AFEF', anger:'#E06C75',
+    fear:'#D19A66', surprise:'#E5C07B', disgust:'#98C379', neutral:'#7A7A8A'
+};
+var SEVERITY_COLORS = { info:'#61AFEF', warning:'#E5C07B', issue:'#E06C75' };
+
+function init(data) {
+    if (typeof data === 'string') { try { data = JSON.parse(data); } catch(e) { data = {}; } }
+    _data = data;
+    renderOverview();
+    renderPacingHeatmap();
+    renderStyleChart();
+    renderEmotions();
+    renderNotes();
+}
+
+function renderOverview() {
+    var el = document.getElementById('overview');
+    if (!_data.scenes || _data.scenes.length === 0) {
+        el.innerHTML = '<div class=""empty-state"">No analysis data available.</div>';
+        return;
+    }
+    var totalWords = _data.scenes.reduce(function(s,sc){return s+sc.wordCount;},0);
+    var totalSentences = _data.scenes.reduce(function(s,sc){return s+sc.sentenceCount;},0);
+    var avgSL = totalSentences > 0 ? (totalWords/totalSentences).toFixed(1) : '0';
+    var noteCount = _data.notes ? _data.notes.length : 0;
+    var chapters = [...new Set(_data.scenes.map(function(s){return s.chapter;}))];
+    el.innerHTML =
+        '<div class=""stat-card""><div class=""stat-value"">'+totalWords.toLocaleString()+'</div><div class=""stat-label"">Total Words</div></div>'+
+        '<div class=""stat-card""><div class=""stat-value"">'+_data.scenes.length+'</div><div class=""stat-label"">Scenes Analyzed</div></div>'+
+        '<div class=""stat-card""><div class=""stat-value"">'+chapters.length+'</div><div class=""stat-label"">Chapters</div></div>'+
+        '<div class=""stat-card""><div class=""stat-value"">'+avgSL+'</div><div class=""stat-label"">Avg Sentence Length</div></div>'+
+        '<div class=""stat-card""><div class=""stat-value"">'+noteCount+'</div><div class=""stat-label"">Notes Generated</div></div>';
+}
+
+function renderPacingHeatmap() {
+    var el = document.getElementById('pacing');
+    if (!_data.scenes || _data.scenes.length === 0) return;
+    var maxWc = Math.max.apply(null, _data.scenes.map(function(s){return s.wordCount;}));
+    var html = '<div class=""heatmap"">';
+    _data.scenes.forEach(function(sc) {
+        var ratio = maxWc > 0 ? sc.wordCount / maxWc : 0;
+        var h = Math.max(8, Math.round(ratio * 80));
+        // Color: short=cool(blue) to long=warm(purple)
+        var r = Math.round(100 + ratio * 68);
+        var g = Math.round(160 - ratio * 60);
+        var b = Math.round(200 + ratio * 1);
+        var bg = 'rgb('+r+','+g+','+b+')';
+        html += '<div class=""hm-cell"" style=""height:'+h+'px;background:'+bg+'"" '+
+            'title=""'+sc.title+' ('+sc.chapter+')\n'+sc.wordCount+' words"">' +
+            '</div>';
+    });
+    html += '</div><div style=""display:flex;gap:2px;margin-top:4px;"">';
+    _data.scenes.forEach(function(sc) {
+        html += '<div class=""hm-label"" style=""flex:1;min-width:28px;"">'+sc.title.substring(0,8)+'</div>';
+    });
+    html += '</div>';
+    el.innerHTML = html;
+}
+
+function renderStyleChart() {
+    var el = document.getElementById('style');
+    if (!_data.scenes || _data.scenes.length === 0) return;
+    var maxASL = Math.max.apply(null, _data.scenes.map(function(s){return s.avgSentenceLength;}));
+    if (maxASL <= 0) maxASL = 1;
+    var html = '<div class=""bar-chart"">';
+    _data.scenes.forEach(function(sc) {
+        var pct = Math.round((sc.avgSentenceLength / maxASL) * 100);
+        var dr = Math.round(sc.dialogueRatio * 100);
+        html += '<div class=""bar-col"">' +
+            '<div class=""bar"" style=""height:'+pct+'%;background:#A89EC9;"" ' +
+            'title=""'+sc.title+'\nAvg sentence: '+sc.avgSentenceLength+' words\nDialogue: '+dr+'%\nContractions: '+Math.round(sc.contractionRate*100)+'%""></div>' +
+            '<div class=""bar-label"">'+sc.title.substring(0,6)+'</div></div>';
+    });
+    html += '</div>';
+    el.innerHTML = html;
+}
+
+function renderEmotions() {
+    var el = document.getElementById('emotions');
+    if (!_data.scenes) return;
+    var hasEmotions = _data.scenes.some(function(s){return s.emotions !== null;});
+    if (!hasEmotions) {
+        el.innerHTML = '<div class=""empty-state"">No emotion data — download models and re-run analysis for emotion classification.</div>';
+        return;
+    }
+    var html = '';
+    _data.scenes.forEach(function(sc) {
+        if (!sc.emotions) { return; }
+        html += '<div style=""display:flex;align-items:center;gap:8px;margin-bottom:4px;"">';
+        html += '<div style=""width:80px;font-size:11px;color:#9E9AA0;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"" title=""'+sc.title+' ('+sc.chapter+')"">'+sc.title+'</div>';
+        html += '<div class=""emotion-row"" style=""flex:1;"">';
+        for (var key in sc.emotions) {
+            var pct = Math.round(sc.emotions[key] * 100);
+            if (pct < 2) continue;
+            var color = EMOTION_COLORS[key] || '#7A7A8A';
+            html += '<div class=""emotion-seg"" style=""width:'+pct+'%;background:'+color+'"" title=""'+key+': '+pct+'%""></div>';
+        }
+        html += '</div></div>';
+    });
+    html += '<div class=""emotion-legend"">';
+    for (var key in EMOTION_COLORS) {
+        html += '<div class=""legend-item""><div class=""legend-dot"" style=""background:'+EMOTION_COLORS[key]+'""></div>'+
+            key.charAt(0).toUpperCase()+key.slice(1)+'</div>';
+    }
+    html += '</div>';
+    el.innerHTML = html;
+}
+
+function renderNotes() {
+    var el = document.getElementById('notes');
+    if (!_data.notes || _data.notes.length === 0) {
+        el.innerHTML = '<div class=""empty-state"">No notes generated.</div>';
+        return;
+    }
+    var html = '';
+    _data.notes.forEach(function(n) {
+        var color = SEVERITY_COLORS[n.severity] || '#61AFEF';
+        html += '<div class=""note-card"">' +
+            '<div class=""note-header"">' +
+            '<div class=""note-dot"" style=""background:'+color+'""></div>' +
+            '<span class=""note-cat"">'+n.category+(n.chapter?' / '+n.chapter:'')+
+            (n.scene?' / '+n.scene:'')+'</span></div>' +
+            '<div class=""note-msg"">'+escHtml(n.message)+'</div></div>';
+    });
+    el.innerHTML = html;
+}
+
+function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+";
+
+            const string bodyHtml = @"
+<div class=""container"">
+    <h2>Overview</h2>
+    <div id=""overview"" class=""stats-grid""></div>
+
+    <h2>Pacing Heatmap</h2>
+    <div id=""pacing"" class=""chart-area""></div>
+
+    <h2>Style Consistency</h2>
+    <div id=""style"" class=""chart-area""></div>
+
+    <h2>Emotion Distribution</h2>
+    <div id=""emotions"" class=""chart-area""></div>
+
+    <h2>Analysis Notes</h2>
+    <div id=""notes""></div>
+</div>
+";
+
+            return "<!DOCTYPE html><html><head><meta charset=\"utf-8\"/>"
+                 + "<style>" + css + "</style></head><body>"
+                 + bodyHtml
+                 + "<script>" + appJs
+                 + "init(" + dataJson + ");"
                  + "</" + "script></body></html>";
         }
 

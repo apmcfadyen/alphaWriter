@@ -122,6 +122,24 @@ namespace alphaWriter.Models
             }
         }
 
+        // Transient — populated after NLP analysis, not persisted
+        private int _analysisNoteCount;
+        [System.Text.Json.Serialization.JsonIgnore]
+        public int AnalysisNoteCount
+        {
+            get => _analysisNoteCount;
+            set
+            {
+                if (_analysisNoteCount == value) return;
+                _analysisNoteCount = value;
+                Notify(nameof(AnalysisNoteCount));
+                Notify(nameof(HasAnalysisNotes));
+            }
+        }
+
+        [System.Text.Json.Serialization.JsonIgnore]
+        public bool HasAnalysisNotes => _analysisNoteCount > 0;
+
         private int ComputeWordCount()
         {
             if (string.IsNullOrWhiteSpace(_content)) return 0;
@@ -150,7 +168,7 @@ namespace alphaWriter.Models
         private static readonly Regex _unicodeEscapeRx =
             new(@"\\u([0-9a-fA-F]{4})", RegexOptions.Compiled);
 
-        private static string DecodeUnicodeEscapes(string text) =>
+        internal static string DecodeUnicodeEscapes(string text) =>
             _unicodeEscapeRx.Replace(text,
                 m => ((char)Convert.ToInt32(m.Groups[1].Value, 16)).ToString());
 
@@ -165,7 +183,7 @@ namespace alphaWriter.Models
 
         // Converts HTML to plain text. Block-level elements (<br>, <div>, <p>)
         // emit \n so that // line comments have a newline to terminate against.
-        private static string StripHtml(string html)
+        internal static string StripHtml(string html)
         {
             var sb = new StringBuilder();
             var tagBuf = new StringBuilder();
@@ -192,7 +210,7 @@ namespace alphaWriter.Models
         }
 
         // Decodes common HTML entities to match the JS-side computeWordCount.
-        private static string DecodeEntities(string text)
+        internal static string DecodeEntities(string text)
         {
             return text.Replace("&nbsp;", " ")
                        .Replace("&amp;", "&")
@@ -202,7 +220,7 @@ namespace alphaWriter.Models
         }
 
         // Strips /* block comments */ and // line comments from plain text.
-        private static string StripComments(string text)
+        internal static string StripComments(string text)
         {
             var sb = new StringBuilder(text.Length);
             int i = 0;

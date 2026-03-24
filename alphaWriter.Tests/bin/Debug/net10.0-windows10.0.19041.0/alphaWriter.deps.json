@@ -11,6 +11,8 @@
         "dependencies": {
           "CommunityToolkit.Mvvm": "8.4.1",
           "Microsoft.Extensions.Logging.Debug": "10.0.0",
+          "Microsoft.ML.OnnxRuntime": "1.22.0",
+          "Microsoft.ML.Tokenizers": "1.0.2",
           "Microsoft.Maui.Controls": "10.0.20",
           "Microsoft.Web.WebView2.Core.Projection": "1.0.3179.45",
           "runtimepack.Microsoft.Windows.SDK.NET.Ref": "10.0.19041.57"
@@ -36,6 +38,14 @@
           "lib/net8.0-windows10.0.17763/CommunityToolkit.Mvvm.dll": {
             "assemblyVersion": "8.4.0.0",
             "fileVersion": "8.4.1.1"
+          }
+        }
+      },
+      "Google.Protobuf/3.27.1": {
+        "runtime": {
+          "lib/net5.0/Google.Protobuf.dll": {
+            "assemblyVersion": "3.27.1.0",
+            "fileVersion": "3.27.1.0"
           }
         }
       },
@@ -396,6 +406,47 @@
           }
         }
       },
+      "Microsoft.ML.OnnxRuntime/1.22.0": {
+        "dependencies": {
+          "Microsoft.ML.OnnxRuntime.Managed": "1.22.0"
+        },
+        "native": {
+          "runtimes/win-x64/native/onnxruntime.dll": {
+            "fileVersion": "1.22.25.508"
+          },
+          "runtimes/win-x64/native/onnxruntime.lib": {
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/win-x64/native/onnxruntime_providers_shared.dll": {
+            "fileVersion": "1.22.25.508"
+          },
+          "runtimes/win-x64/native/onnxruntime_providers_shared.lib": {
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "Microsoft.ML.OnnxRuntime.Managed/1.22.0": {
+        "dependencies": {
+          "System.Numerics.Tensors": "9.0.0"
+        },
+        "runtime": {
+          "lib/net8.0/Microsoft.ML.OnnxRuntime.dll": {
+            "assemblyVersion": "1.22.0.0",
+            "fileVersion": "1.22.0.0"
+          }
+        }
+      },
+      "Microsoft.ML.Tokenizers/1.0.2": {
+        "dependencies": {
+          "Google.Protobuf": "3.27.1"
+        },
+        "runtime": {
+          "lib/net8.0/Microsoft.ML.Tokenizers.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.225.12505"
+          }
+        }
+      },
       "Microsoft.Web.WebView2/1.0.3179.45": {
         "native": {
           "runtimes/win-x64/native/WebView2Loader.dll": {
@@ -518,6 +569,14 @@
           }
         }
       },
+      "System.Numerics.Tensors/9.0.0": {
+        "runtime": {
+          "lib/net9.0/System.Numerics.Tensors.dll": {
+            "assemblyVersion": "9.0.0.0",
+            "fileVersion": "9.0.24.52809"
+          }
+        }
+      },
       "Microsoft.Web.WebView2.Core.Projection/1.0.3179.45": {
         "runtime": {
           "Microsoft.Web.WebView2.Core.Projection.dll": {
@@ -545,6 +604,13 @@
       "sha512": "sha512-BTRteP8SvFyd/4KAreIFJBcxD2O9trLxLDD/p8YkSDDrfFOzy2U8cHyz6r+5Eh4kDhJdzAVglei6a+Bh4jCpUA==",
       "path": "communitytoolkit.mvvm/8.4.1",
       "hashPath": "communitytoolkit.mvvm.8.4.1.nupkg.sha512"
+    },
+    "Google.Protobuf/3.27.1": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-7IVz9TzhYCZ8qY0rPhXUnyJSXYdshUqmmxmTI763XmDDSJJFnyfKH43FFcMJu/CZgBcE98xlFztrKwhzcRkiPg==",
+      "path": "google.protobuf/3.27.1",
+      "hashPath": "google.protobuf.3.27.1.nupkg.sha512"
     },
     "Microsoft.Extensions.Configuration/10.0.0": {
       "type": "package",
@@ -693,6 +759,27 @@
       "path": "microsoft.maui.graphics.win2d.winui.desktop/10.0.20",
       "hashPath": "microsoft.maui.graphics.win2d.winui.desktop.10.0.20.nupkg.sha512"
     },
+    "Microsoft.ML.OnnxRuntime/1.22.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-IC5jOaU6YZ7qcLl7JiR2yL6+NznthdCPwW8XgN2XkbvDERRFqMLIVtwfzu2H110fhms59VIyyMOxHXHl2iVzCg==",
+      "path": "microsoft.ml.onnxruntime/1.22.0",
+      "hashPath": "microsoft.ml.onnxruntime.1.22.0.nupkg.sha512"
+    },
+    "Microsoft.ML.OnnxRuntime.Managed/1.22.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-zlG3eY5mJnx1BhYAxRwpuHCGHzl3B+cY5/se0RmlVBw6Yh6QTGjPAXdjhlBIcw6BPFhgMn9lxWPE/U3Fvis+BQ==",
+      "path": "microsoft.ml.onnxruntime.managed/1.22.0",
+      "hashPath": "microsoft.ml.onnxruntime.managed.1.22.0.nupkg.sha512"
+    },
+    "Microsoft.ML.Tokenizers/1.0.2": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-MefL5+IakSE/CWzx4BQQairgY1fXFBVTPtnn7/01Wngsk2248loViqQ1M5+YB8KBwbi0HjcfoMo86h+cSjiEOA==",
+      "path": "microsoft.ml.tokenizers/1.0.2",
+      "hashPath": "microsoft.ml.tokenizers.1.0.2.nupkg.sha512"
+    },
     "Microsoft.Web.WebView2/1.0.3179.45": {
       "type": "package",
       "serviceable": true,
@@ -706,6 +793,13 @@
       "sha512": "sha512-zeVFVrkFYPkAL1cmXo62D1LVC66VqBiMx+WfZ3aDUmizNECCJewMTk0JwjlgYQcIqxqsK1SjF1CeG74TsokWpQ==",
       "path": "microsoft.windowsappsdk/1.7.250909003",
       "hashPath": "microsoft.windowsappsdk.1.7.250909003.nupkg.sha512"
+    },
+    "System.Numerics.Tensors/9.0.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-hyJB4UlpAi19Xr9AXzu2NuagKC4lPfHObNMEAA0HmqFz2rX7wKgzeYzO/jM/eBHDhnUGFFEjk5cOoJaxqg5J4A==",
+      "path": "system.numerics.tensors/9.0.0",
+      "hashPath": "system.numerics.tensors.9.0.0.nupkg.sha512"
     },
     "Microsoft.Web.WebView2.Core.Projection/1.0.3179.45": {
       "type": "reference",
