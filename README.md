@@ -17,7 +17,7 @@ In fact, I would not recommend this as a tool to write a novel from scratch. alp
 
 ## Text Editor Features:
 - Basic bold, italics, underline styling
-- In-line styling of known Characters, Locations, and Items (If you've programmed before, think "peeking the definition" of an entity in a book)
+- In-line "hyperlinking" of known Characters, Locations, and Items (If you've programmed before, think "peeking the definition" of an entity in a book)
 - Able to add editing to-dos and "comments" using // text for single paragraph and /* text */ for multiple paragraphs. Comments do not count towards wordcount
 
 ## Reporting Features:
