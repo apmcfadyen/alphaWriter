@@ -55,13 +55,14 @@ namespace alphaWriter.Services.Nlp
                     notes.Add(new NlpNote
                     {
                         Severity = NlpNoteSeverity.Warning,
-                        Category = NlpNoteCategory.Structure,
+                        Category = NlpNoteCategory.DevelopmentalEditor,
                         SceneId = sceneId,
                         SceneTitle = sceneTitle,
                         ChapterTitle = chapterTitle,
                         Message = $"'{sceneTitle}' is {metrics.SceneWordCount:N0} words — " +
-                                  $"{metrics.SceneToChapterRatio:F1}x the chapter average of " +
-                                  $"{metrics.ChapterAverageWordCount:N0}. Consider splitting into multiple scenes."
+                                  $"{metrics.SceneToChapterRatio:F1}× the chapter average of {metrics.ChapterAverageWordCount:N0}. " +
+                                  "A scene this long against its surroundings disrupts the chapter's rhythm. " +
+                                  "Consider splitting at a natural tension point to give readers a breath."
                     });
                 }
                 else if (metrics.SceneToChapterRatio < 0.2 && metrics.SceneWordCount > 0)
@@ -69,13 +70,14 @@ namespace alphaWriter.Services.Nlp
                     notes.Add(new NlpNote
                     {
                         Severity = NlpNoteSeverity.Info,
-                        Category = NlpNoteCategory.Structure,
+                        Category = NlpNoteCategory.DevelopmentalEditor,
                         SceneId = sceneId,
                         SceneTitle = sceneTitle,
                         ChapterTitle = chapterTitle,
-                        Message = $"'{sceneTitle}' is only {metrics.SceneWordCount:N0} words — " +
-                                  $"much shorter than the chapter average of {metrics.ChapterAverageWordCount:N0}. " +
-                                  "Consider whether it could be merged with an adjacent scene."
+                        Message = $"'{sceneTitle}' is only {metrics.SceneWordCount:N0} words against a chapter average " +
+                                  $"of {metrics.ChapterAverageWordCount:N0}. Very short scenes can deliver sharp, " +
+                                  "impactful moments — but if this one feels incomplete, " +
+                                  "consider merging it with an adjacent scene."
                     });
                 }
             }
@@ -86,13 +88,13 @@ namespace alphaWriter.Services.Nlp
                 notes.Add(new NlpNote
                 {
                     Severity = NlpNoteSeverity.Warning,
-                    Category = NlpNoteCategory.Pacing,
+                    Category = NlpNoteCategory.DevelopmentalEditor,
                     SceneId = sceneId,
                     SceneTitle = sceneTitle,
                     ChapterTitle = chapterTitle,
-                    Message = $"'{sceneTitle}' has a stretch of {metrics.LongestNarrationStreak} consecutive " +
-                              "sentences without dialogue. This may slow pacing — consider breaking it up " +
-                              "with dialogue or action."
+                    Message = $"'{sceneTitle}' has a run of {metrics.LongestNarrationStreak} consecutive narration sentences " +
+                              "without a single line of dialogue. Pure narration at this length can feel airless — " +
+                              "even a brief exchange or piece of direct speech can ground readers and reset the rhythm."
                 });
             }
 

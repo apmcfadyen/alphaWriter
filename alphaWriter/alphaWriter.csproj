@@ -75,6 +75,8 @@
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0" />
 		<PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.22.0" />
 		<PackageReference Include="Microsoft.ML.Tokenizers" Version="1.0.2" />
+		<PackageReference Include="Catalyst" Version="1.0.65141" />
+		<PackageReference Include="Catalyst.Models.English" Version="1.0.30952" />
 	</ItemGroup>
 
 </Project>

@@ -113,7 +113,7 @@ public class ToneShiftDetectionTests
 
         Assert.NotEmpty(notes);
         Assert.Contains(notes, n =>
-            n.Category == NlpNoteCategory.Emotion &&
+            n.Category == NlpNoteCategory.LineEditor &&
             n.SceneTitle == "The Arrival");
     }
 

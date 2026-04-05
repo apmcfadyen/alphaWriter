@@ -15,22 +15,34 @@ namespace alphaWriter.ViewModels
         private readonly IImageService _imageService;
         private readonly INlpAnalysisService _nlpAnalysisService;
         private readonly INlpModelManager _modelManager;
+        private readonly INerService _nerService;
+        private readonly IPosTaggingService _posTaggingService;
+        private readonly ILocationHeuristicService _locationHeuristic;
+        private readonly INlpCacheService _nlpCacheService;
         private System.Threading.Timer? _saveTimer;
         private bool _initialized;
         private CancellationTokenSource? _analysisCts;
         private List<Models.Analysis.SceneAnalysisResult>? _analysisResults;
         private List<NlpNote> _allNotes = [];
+        private List<Models.Analysis.CharacterVoiceProfile> _voiceProfiles = [];
+        private List<Models.Analysis.DialogueVoiceProfile> _dialogueProfiles = [];
 
         // Raised when the selected scene changes so the page can update the WebView
         public event Action<Scene?>? SelectedSceneChanged;
 
         public WriterViewModel(IBookService bookService, IImageService imageService,
-            INlpAnalysisService nlpAnalysisService, INlpModelManager modelManager)
+            INlpAnalysisService nlpAnalysisService, INlpModelManager modelManager,
+            INerService nerService, IPosTaggingService posTaggingService,
+            ILocationHeuristicService locationHeuristic, INlpCacheService nlpCacheService)
         {
             _bookService = bookService;
             _imageService = imageService;
             _nlpAnalysisService = nlpAnalysisService;
             _modelManager = modelManager;
+            _nerService = nerService;
+            _posTaggingService = posTaggingService;
+            _locationHeuristic = locationHeuristic;
+            _nlpCacheService = nlpCacheService;
         }
 
         [ObservableProperty]
@@ -118,13 +130,19 @@ namespace alphaWriter.ViewModels
         private string analysisProgress = "";
 
         [ObservableProperty]
+        private string analysisStatusText = "";
+
+        [ObservableProperty]
+        private string analysisStatusColor = "#9E9AA0";
+
+        [ObservableProperty]
         private string selectedCategoryFilter = "All";
 
         [ObservableProperty]
         private string selectedSeverityFilter = "All";
 
         public List<string> CategoryFilterOptions { get; } =
-            ["All", "Voice", "Emotion", "Pacing", "Style", "Structure"];
+            ["All", "Copy Editor", "Line Editor", "Developmental Editor"];
 
         public List<string> SeverityFilterOptions { get; } =
             ["All", "Issue", "Warning", "Info"];
@@ -136,6 +154,39 @@ namespace alphaWriter.ViewModels
 
         [ObservableProperty]
         private EntityPreview? entityPreview;
+
+        [ObservableProperty]
+        private ObservableCollection<NerCandidateViewModel> characterCandidates = [];
+
+        [ObservableProperty]
+        private ObservableCollection<NerCandidateViewModel> locationCandidates = [];
+
+        [ObservableProperty]
+        private ObservableCollection<NerCandidateViewModel> itemCandidates = [];
+
+        [ObservableProperty]
+        private bool hasCharacterCandidates;
+
+        [ObservableProperty]
+        private bool hasLocationCandidates;
+
+        [ObservableProperty]
+        private bool hasItemCandidates;
+
+        [ObservableProperty]
+        private bool isScanning;
+
+        [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(HasScanProgress))]
+        private string scanProgress = string.Empty;
+
+        public bool HasScanProgress => !string.IsNullOrEmpty(ScanProgress);
+
+        [ObservableProperty]
+        private ObservableCollection<BreadcrumbItem> breadcrumbItems = [];
+
+        [ObservableProperty]
+        private string breadcrumbPath = string.Empty;
 
         // Raised whenever entity names or aliases change so the WebView can re-highlight.
         public event Action? EntitiesChanged;
@@ -206,12 +257,20 @@ namespace alphaWriter.ViewModels
             // Clear stale analysis data from the previous book
             _allNotes = [];
             _analysisResults = null;
+            _voiceProfiles = [];
+            _dialogueProfiles = [];
             NlpNotes = [];
             AnalysisProgress = "";
+            AnalysisStatusText = "";
             OnPropertyChanged(nameof(HasAnalysisResults));
+
+            // Auto-load persisted analysis for the newly selected book
+            if (value is not null)
+                _ = TryLoadPersistedAnalysisAsync(value);
 
             // Persist last-opened book across sessions
             Preferences.Default.Set("lastBookId", value?.Id ?? string.Empty);
+            UpdateBreadcrumb();
         }
 
         partial void OnIsBookInfoVisibleChanged(bool value)
@@ -255,6 +314,7 @@ namespace alphaWriter.ViewModels
         {
             SelectedScene = null;
             OnPropertyChanged(nameof(HasSelectedChapter));
+            UpdateBreadcrumb();
         }
 
         partial void OnSelectedSceneChanged(Scene? value)
@@ -277,6 +337,7 @@ namespace alphaWriter.ViewModels
             OnPropertyChanged(nameof(IsSceneEditorVisible));
             RebuildViewpointOptions();
             RebuildSceneEntityOptions();
+            UpdateBreadcrumb();
         }
 
         partial void OnSidebarModeChanged(SidebarMode value)
@@ -490,6 +551,69 @@ namespace alphaWriter.ViewModels
         }
 
         public void SaveSceneTitle() => TriggerSaveAsync().ConfigureAwait(false);
+
+        // ── Breadcrumb navigation ──────────────────────────────────────────────
+
+        [RelayCommand]
+        private void NavigateToBreadcrumb(string level)
+        {
+            // level can be "book", "chapter", or "scene"
+            switch (level)
+            {
+                case "chapter":
+                    // Deselect scene when navigating to chapter level
+                    SelectedScene = null;
+                    break;
+                case "book":
+                    // Deselect chapter and scene when navigating to book level
+                    SelectedChapter = null;
+                    SelectedScene = null;
+                    break;
+            }
+        }
+
+        private void UpdateBreadcrumb()
+        {
+            var items = new ObservableCollection<BreadcrumbItem>();
+
+            // Book level
+            if (SelectedBook is not null)
+            {
+                items.Add(new BreadcrumbItem
+                {
+                    Label = SelectedBook.Title,
+                    Level = "book",
+                    Command = NavigateToBreadcrumbCommand
+                });
+
+                // Chapter level
+                if (SelectedChapter is not null)
+                {
+                    items.Add(new BreadcrumbItem
+                    {
+                        Label = SelectedChapter.Title,
+                        Level = "chapter",
+                        Command = NavigateToBreadcrumbCommand
+                    });
+
+                    // Scene level
+                    if (SelectedScene is not null)
+                    {
+                        items.Add(new BreadcrumbItem
+                        {
+                            Label = SelectedScene.Title,
+                            Level = "scene",
+                            Command = null // Scene is current, so not clickable
+                        });
+                    }
+                }
+            }
+
+            BreadcrumbItems = items;
+
+            // Also update the simple string format
+            BreadcrumbPath = string.Join(" / ", items.Select(x => x.Label));
+        }
 
         // ── Content / editor ──────────────────────────────────────────────────
 
@@ -813,9 +937,11 @@ namespace alphaWriter.ViewModels
             try
             {
                 var progress = new Progress<string>(msg => AnalysisProgress = msg);
-                var (notes, results) = await _nlpAnalysisService.AnalyzeBookAsync(SelectedBook, progress, ct);
+                var (notes, results, profiles, dialogueProfiles) = await _nlpAnalysisService.AnalyzeBookAsync(SelectedBook, progress, ct);
                 _analysisResults = results;
                 _allNotes = notes;
+                _voiceProfiles = profiles;
+                _dialogueProfiles = dialogueProfiles;
                 SelectedCategoryFilter = "All";
                 SelectedSeverityFilter = "All";
                 ApplyNoteFilters();
@@ -825,6 +951,9 @@ namespace alphaWriter.ViewModels
 
                 // Populate inline scene analysis badges
                 PopulateSceneNoteCounts(notes);
+
+                // Persist analysis results for next session
+                await PersistAnalysisResultsAsync(results, notes);
             }
             catch (OperationCanceledException)
             {
@@ -847,12 +976,289 @@ namespace alphaWriter.ViewModels
         {
             _allNotes = [];
             _analysisResults = null;
+            _voiceProfiles = [];
+            _dialogueProfiles = [];
             NlpNotes = [];
             AnalysisProgress = "";
+            AnalysisStatusText = "";
             SelectedCategoryFilter = "All";
             SelectedSeverityFilter = "All";
             OnPropertyChanged(nameof(HasAnalysisResults));
             ClearSceneNoteCounts();
+        }
+
+        private async Task PersistAnalysisResultsAsync(
+            List<SceneAnalysisResult> results, List<NlpNote> notes)
+        {
+            if (SelectedBook is null) return;
+
+            var hashes = new Dictionary<string, string>();
+            foreach (var scene in SelectedBook.Chapters.SelectMany(c => c.Scenes))
+                hashes[scene.Id] = NlpCacheService.ComputeHash(scene.Content ?? string.Empty);
+
+            var data = new PersistedAnalysisData
+            {
+                AnalyzedAtUtc = DateTime.UtcNow,
+                SceneContentHashes = hashes,
+                Results = results,
+                Notes = notes
+            };
+
+            await _nlpCacheService.SaveAnalysisResultsAsync(SelectedBook.Id, data);
+
+            var timestamp = data.AnalyzedAtUtc.ToLocalTime().ToString("MMM d, yyyy 'at' h:mm tt");
+            AnalysisStatusText = $"Analysis from {timestamp}";
+            AnalysisStatusColor = "#9E9AA0";
+        }
+
+        private async Task TryLoadPersistedAnalysisAsync(Book book)
+        {
+            try
+            {
+                var data = await Task.Run(() => _nlpCacheService.LoadAnalysisResults(book.Id));
+                if (data is null) return;
+
+                // User may have switched books while we were loading
+                if (SelectedBook?.Id != book.Id) return;
+
+                _analysisResults = data.Results;
+                _allNotes = data.Notes;
+                _voiceProfiles = [];
+                _dialogueProfiles = [];
+                SelectedCategoryFilter = "All";
+                SelectedSeverityFilter = "All";
+                ApplyNoteFilters();
+                PopulateSceneNoteCounts(data.Notes);
+                AnalysisProgress = $"Found {data.Notes.Count} note{(data.Notes.Count == 1 ? "" : "s")}.";
+                OnPropertyChanged(nameof(HasAnalysisResults));
+
+                // Check staleness
+                var stale = false;
+                var currentScenes = book.Chapters.SelectMany(c => c.Scenes).ToList();
+                var currentIds = new HashSet<string>(currentScenes.Select(s => s.Id));
+                var persistedIds = new HashSet<string>(data.SceneContentHashes.Keys);
+
+                if (!currentIds.SetEquals(persistedIds))
+                {
+                    stale = true;
+                }
+                else
+                {
+                    foreach (var scene in currentScenes)
+                    {
+                        var currentHash = NlpCacheService.ComputeHash(scene.Content ?? string.Empty);
+                        if (!data.SceneContentHashes.TryGetValue(scene.Id, out var savedHash)
+                            || currentHash != savedHash)
+                        {
+                            stale = true;
+                            break;
+                        }
+                    }
+                }
+
+                var timestamp = data.AnalyzedAtUtc.ToLocalTime().ToString("MMM d, yyyy 'at' h:mm tt");
+                if (stale)
+                {
+                    AnalysisStatusText = $"Analysis from {timestamp} \u2014 content has changed since";
+                    AnalysisStatusColor = "#E5C07B";
+                }
+                else
+                {
+                    AnalysisStatusText = $"Analysis from {timestamp}";
+                    AnalysisStatusColor = "#9E9AA0";
+                }
+            }
+            catch
+            {
+                // Silently ignore — user can always re-run analysis
+            }
+        }
+
+        [RelayCommand]
+        private async Task ScanEntities()
+        {
+            if (SelectedBook is null) return;
+
+            IsScanning = true;
+            ScanProgress = "Scanning\u2026";
+            CharacterCandidates = [];
+            LocationCandidates  = [];
+            ItemCandidates      = [];
+            HasCharacterCandidates = false;
+            HasLocationCandidates  = false;
+            HasItemCandidates      = false;
+
+            try
+            {
+                // Collect all sentences from every non-empty scene in the book
+                var allSentences = SelectedBook.Chapters
+                    .SelectMany(c => c.Scenes)
+                    .Where(s => !string.IsNullOrWhiteSpace(s.Content))
+                    .SelectMany(s => NlpTextExtractor.SplitSentences(
+                                    NlpTextExtractor.ExtractPlainText(s.Content)))
+                    .ToList();
+
+                if (allSentences.Count == 0)
+                {
+                    ScanProgress = "No text found in book.";
+                    return;
+                }
+
+                ScanProgress = "Loading entity recognition model\u2026";
+                await _nerService.LoadAsync();
+
+                ScanProgress = "Extracting entities\u2026";
+                var entities = await Task.Run(() => _nerService.ExtractEntities(allSentences));
+
+                // Run spatial keyword heuristic for fictional locations
+                ScanProgress = "Loading POS tagger\u2026";
+                await _posTaggingService.LoadAsync();
+
+                ScanProgress = "Scanning for locations\u2026";
+                var tagged = await Task.Run(() => _posTaggingService.TagSentences(allSentences));
+
+                // Build character name set from WikiNER Person results to exclude from locations
+                var nerCharacterNames = entities
+                    .Where(e => e.Type == Models.NerEntityType.Character)
+                    .Select(e => e.Name.ToLowerInvariant())
+                    .ToHashSet() as IReadOnlySet<string>;
+
+                var heuristicLocs = await Task.Run(
+                    () => _locationHeuristic.FindLocationCandidates(allSentences, tagged, nerCharacterNames));
+
+                // Merge heuristic locations into the entities list (avoid duplicates)
+                var existingLocNames = entities
+                    .Where(e => e.Type == Models.NerEntityType.Location)
+                    .Select(e => e.Name.ToLowerInvariant())
+                    .ToHashSet();
+
+                foreach (var (name, count) in heuristicLocs)
+                {
+                    if (!existingLocNames.Contains(name.ToLowerInvariant()))
+                    {
+                        entities.Add((name, Models.NerEntityType.Location, count));
+                        existingLocNames.Add(name.ToLowerInvariant());
+                    }
+                }
+
+                // Build case-insensitive sets of already-known entity names for dedup
+                var knownChars = SelectedBook.Characters
+                    .Select(c => c.Name.Trim().ToLowerInvariant()).ToHashSet();
+                var knownLocs = SelectedBook.Locations
+                    .Select(l => l.Name.Trim().ToLowerInvariant()).ToHashSet();
+                var knownItems = SelectedBook.Items
+                    .Select(i => i.Name.Trim().ToLowerInvariant()).ToHashSet();
+
+                var chars = new List<NerCandidateViewModel>();
+                var locs  = new List<NerCandidateViewModel>();
+                var items = new List<NerCandidateViewModel>();
+
+                foreach (var (name, type, count) in entities)
+                {
+                    var lower = name.ToLowerInvariant();
+                    var vm = new NerCandidateViewModel { Name = name, Type = type, Count = count };
+                    switch (type)
+                    {
+                        case Models.NerEntityType.Character when !knownChars.Contains(lower):
+                            chars.Add(vm);
+                            break;
+                        case Models.NerEntityType.Location when !knownLocs.Contains(lower):
+                            locs.Add(vm);
+                            break;
+                        case Models.NerEntityType.Item when !knownItems.Contains(lower):
+                            items.Add(vm);
+                            break;
+                    }
+                }
+
+                CharacterCandidates    = new ObservableCollection<NerCandidateViewModel>(chars);
+                LocationCandidates     = new ObservableCollection<NerCandidateViewModel>(locs);
+                ItemCandidates         = new ObservableCollection<NerCandidateViewModel>(items);
+                HasCharacterCandidates = chars.Count > 0;
+                HasLocationCandidates  = locs.Count > 0;
+                HasItemCandidates      = items.Count > 0;
+
+                var total = chars.Count + locs.Count + items.Count;
+                if (total > 0)
+                {
+                    ScanProgress = $"Found {total} new entit{(total == 1 ? "y" : "ies")}.";
+                }
+                else if (entities.Count > 0)
+                {
+                    // Entities were found but all filtered as already-known
+                    ScanProgress = $"All {entities.Count} detected entities already exist in your book.";
+                }
+                else
+                {
+                    // Nothing detected at all — show raw label names for diagnostics
+                    var rawLabels = _nerService.LastRawEntityTypes;
+                    ScanProgress = rawLabels.Count > 0
+                        ? $"No mappable entities found. Raw labels seen: {string.Join(", ", rawLabels)}"
+                        : "No entities detected. The WikiNER model may not have tagged any spans.";
+                }
+            }
+            catch (Exception ex)
+            {
+                ScanProgress = $"Scan failed: {ex.Message.Split('\n')[0]}";
+            }
+            finally
+            {
+                IsScanning = false;
+            }
+        }
+
+        [RelayCommand]
+        private async Task AddCheckedCharacters()
+        {
+            if (SelectedBook is null) return;
+            var toAdd = CharacterCandidates.Where(c => c.IsSelected).ToList();
+            foreach (var candidate in toAdd)
+            {
+                SelectedBook.Characters.Add(new Models.Character { Name = candidate.Name });
+                CharacterCandidates.Remove(candidate);
+            }
+            HasCharacterCandidates = CharacterCandidates.Count > 0;
+            if (toAdd.Count > 0)
+            {
+                await TriggerSaveAsync();
+                EntitiesChanged?.Invoke();
+            }
+        }
+
+        [RelayCommand]
+        private async Task AddCheckedLocations()
+        {
+            if (SelectedBook is null) return;
+            var toAdd = LocationCandidates.Where(c => c.IsSelected).ToList();
+            foreach (var candidate in toAdd)
+            {
+                SelectedBook.Locations.Add(new Models.Location { Name = candidate.Name });
+                LocationCandidates.Remove(candidate);
+            }
+            HasLocationCandidates = LocationCandidates.Count > 0;
+            if (toAdd.Count > 0)
+            {
+                await TriggerSaveAsync();
+                EntitiesChanged?.Invoke();
+            }
+        }
+
+        [RelayCommand]
+        private async Task AddCheckedItems()
+        {
+            if (SelectedBook is null) return;
+            var toAdd = ItemCandidates.Where(c => c.IsSelected).ToList();
+            foreach (var candidate in toAdd)
+            {
+                SelectedBook.Items.Add(new Models.Item { Name = candidate.Name });
+                ItemCandidates.Remove(candidate);
+            }
+            HasItemCandidates = ItemCandidates.Count > 0;
+            if (toAdd.Count > 0)
+            {
+                await TriggerSaveAsync();
+                EntitiesChanged?.Invoke();
+            }
         }
 
         private void ApplyNoteFilters()
@@ -865,10 +1271,18 @@ namespace alphaWriter.ViewModels
 
             IEnumerable<NlpNote> filtered = _allNotes;
 
-            if (SelectedCategoryFilter != "All"
-                && Enum.TryParse<NlpNoteCategory>(SelectedCategoryFilter, out var category))
+            if (SelectedCategoryFilter != "All")
             {
-                filtered = filtered.Where(n => n.Category == category);
+                var categoryMap = new Dictionary<string, NlpNoteCategory>
+                {
+                    ["Copy Editor"] = NlpNoteCategory.CopyEditor,
+                    ["Line Editor"] = NlpNoteCategory.LineEditor,
+                    ["Developmental Editor"] = NlpNoteCategory.DevelopmentalEditor
+                };
+                if (categoryMap.TryGetValue(SelectedCategoryFilter, out var category))
+                {
+                    filtered = filtered.Where(n => n.Category == category);
+                }
             }
 
             if (SelectedSeverityFilter != "All"
@@ -966,6 +1380,23 @@ namespace alphaWriter.ViewModels
 
         public bool HasAnalysisResults => _analysisResults is not null && _analysisResults.Count > 0;
 
+        [RelayCommand]
+        private void NavigateToNote(NlpNote note)
+        {
+            if (SelectedBook is null || string.IsNullOrEmpty(note.SceneId)) return;
+
+            foreach (var chapter in SelectedBook.Chapters)
+            {
+                var scene = chapter.Scenes.FirstOrDefault(s => s.Id == note.SceneId);
+                if (scene is null) continue;
+
+                IsStatsPanelVisible = false;
+                SelectedChapter = chapter;
+                SelectedScene = scene;
+                return;
+            }
+        }
+
         private void PopulateSceneNoteCounts(List<NlpNote> notes)
         {
             if (SelectedBook is null) return;
@@ -1014,11 +1445,152 @@ namespace alphaWriter.ViewModels
                 category = n.CategoryLabel.ToLower(),
                 scene = n.SceneTitle,
                 chapter = n.ChapterTitle,
+                sceneId = n.SceneId,
+                sentenceIndex = n.SentenceIndex ?? -1,
                 message = n.Message
             }).ToList();
 
+            // Character voice profiles for the radar chart + consistency timeline
+            var colors = new[] { "#A89EC9", "#7EC8A4", "#C8B07A", "#61AFEF", "#E06C75" };
+            var characterProfiles = _voiceProfiles.Take(8).Select((p, idx) => new
+            {
+                id = p.CharacterId,
+                name = p.CharacterName,
+                color = colors[idx % colors.Length],
+                sceneCount = p.SceneCount,
+                totalWords = p.TotalWords,
+                // Radar axes — raw values (normalized in JS against all character max values)
+                avgSentenceLength = Math.Round(p.Style.AverageSentenceLength, 1),
+                vocabRichness = Math.Round(p.Style.VocabularyRichness, 3),
+                contractionRate = Math.Round(p.Style.ContractionRate, 3),
+                dialogueRatio = Math.Round(p.Style.DialogueRatio, 3),
+                adverbDensity = Math.Round(p.AdverbDensity, 4),
+                passiveVoiceRate = Math.Round(p.PassiveVoiceRate, 3),
+                clauseComplexity = Math.Round(p.ClauseComplexity, 3),
+                readabilityScore = Math.Round(p.ReadabilityScore, 1),
+                // Top 10 distinctive words for word-chip cloud
+                distinctiveWords = p.DistinctiveWords.Take(10).Select(w => new
+                {
+                    word = w.Word,
+                    weight = Math.Round(w.TfIdf, 4)
+                }).ToList(),
+                // Per-scene snapshots for the consistency timeline
+                sceneSnapshots = p.SceneSnapshots.Select(s => new
+                {
+                    scene = s.SceneTitle,
+                    chapter = s.ChapterTitle,
+                    avgSentenceLength = Math.Round(s.AvgSentenceLength, 1),
+                    vocabRichness = Math.Round(s.VocabularyRichness, 3),
+                    contractionRate = Math.Round(s.ContractionRate, 3),
+                    dialogueRatio = Math.Round(s.DialogueRatio, 3),
+                    adverbDensity = Math.Round(s.AdverbDensity, 4),
+                    passiveVoiceRate = Math.Round(s.PassiveVoiceRate, 3),
+                    readabilityScore = Math.Round(s.ReadabilityScore, 1)
+                }).ToList()
+            }).ToList();
+
+            // Dialogue voice profiles for the dialogue fingerprint radar chart
+            var dialogueColors = new[] { "#E5C07B", "#61C88A", "#C678DD", "#56B6C2", "#E06C75" };
+            var dialogueProfiles = _dialogueProfiles.Take(8).Select((p, idx) => new
+            {
+                id = p.CharacterId,
+                name = p.CharacterName,
+                color = dialogueColors[idx % dialogueColors.Length],
+                dialogueLineCount = p.DialogueLineCount,
+                sceneCount = p.SceneCount,
+                totalWords = p.TotalWords,
+                avgSentenceLength = Math.Round(p.AvgSentenceLength, 1),
+                vocabRichness = Math.Round(p.VocabularyRichness, 3),
+                contractionRate = Math.Round(p.ContractionRate, 3),
+                exclamationRate = Math.Round(p.ExclamationRate, 3),
+                adverbDensity = Math.Round(p.AdverbDensity, 4),
+                passiveVoiceRate = Math.Round(p.PassiveVoiceRate, 3),
+                clauseComplexity = Math.Round(p.ClauseComplexity, 3),
+                readabilityScore = Math.Round(p.ReadabilityScore, 1),
+                distinctiveWords = p.DistinctiveWords.Take(10).Select(w => new
+                {
+                    word = w.Word,
+                    weight = Math.Round(w.TfIdf, 4)
+                }).ToList()
+            }).ToList();
+
             return System.Text.Json.JsonSerializer.Serialize(
-                new { scenes, notes },
+                new { scenes, notes, characterProfiles, dialogueProfiles },
+                new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase });
+        }
+
+        /// <summary>
+        /// Builds per-sentence heat map data for the currently selected scene.
+        /// Returns a JSON object: { sentences: [{ index, flags: [] }], echoWords: ["word",...] }
+        /// where flags is a subset of: "passive", "adverbs", "show-dont-tell", "long", "echo"
+        /// </summary>
+        public string BuildHeatMapJson()
+        {
+            if (SelectedScene is null || _analysisResults is null) return "null";
+
+            var result = _analysisResults.FirstOrDefault(r => r.SceneId == SelectedScene.Id);
+            if (result is null) return "null";
+
+            // Gather per-sentence flags from existing analysis notes
+            var sentenceFlags = new Dictionary<int, List<string>>();
+
+            foreach (var note in result.Notes)
+            {
+                if (note.SentenceIndex is null) continue;
+                int idx = note.SentenceIndex.Value;
+                if (!sentenceFlags.TryGetValue(idx, out var flagList))
+                    sentenceFlags[idx] = flagList = [];
+
+                var msg = note.Message;
+                if (msg.Contains("passive", StringComparison.OrdinalIgnoreCase))
+                    flagList.Add("passive");
+                else if (msg.Contains("adverb", StringComparison.OrdinalIgnoreCase))
+                    flagList.Add("adverbs");
+                else if (msg.Contains("names the emotion", StringComparison.OrdinalIgnoreCase)
+                      || msg.Contains("show", StringComparison.OrdinalIgnoreCase) && msg.Contains("tell", StringComparison.OrdinalIgnoreCase))
+                    flagList.Add("show-dont-tell");
+                else if (msg.Contains("subordinate clause", StringComparison.OrdinalIgnoreCase))
+                    flagList.Add("complex");
+            }
+
+            // Unusually long sentences from the flags list on SentenceAnalysis
+            foreach (var s in result.Sentences)
+            {
+                if (s.Flags.Contains("unusually-long"))
+                {
+                    if (!sentenceFlags.TryGetValue(s.Index, out var fl)) sentenceFlags[s.Index] = fl = [];
+                    fl.Add("long");
+                }
+            }
+
+            // Echo words from proximity-echo notes (extract the quoted word)
+            var echoWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var note in result.Notes)
+            {
+                if (!note.Message.Contains("echoes", StringComparison.OrdinalIgnoreCase) &&
+                    !note.Message.Contains("times within five", StringComparison.OrdinalIgnoreCase)) continue;
+                // Message format: "'word' appears N times within..."
+                var firstQuote = note.Message.IndexOf('\'');
+                var secondQuote = note.Message.IndexOf('\'', firstQuote + 1);
+                if (firstQuote >= 0 && secondQuote > firstQuote)
+                    echoWords.Add(note.Message[(firstQuote + 1)..secondQuote]);
+
+                if (note.SentenceIndex.HasValue)
+                {
+                    if (!sentenceFlags.TryGetValue(note.SentenceIndex.Value, out var fl))
+                        sentenceFlags[note.SentenceIndex.Value] = fl = [];
+                    fl.Add("echo");
+                }
+            }
+
+            var sentences = sentenceFlags.Select(kv => new
+            {
+                index = kv.Key,
+                flags = kv.Value.Distinct().ToList()
+            }).OrderBy(x => x.index).ToList();
+
+            return System.Text.Json.JsonSerializer.Serialize(
+                new { sentences, echoWords = echoWords.ToList() },
                 new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase });
         }
 
@@ -1027,21 +1599,24 @@ namespace alphaWriter.ViewModels
             var allEmotions = result.Sentences
                 .Where(s => s.Emotions.Count > 0)
                 .SelectMany(s => s.Emotions)
+                .Where(e => e.Label != Models.Analysis.EmotionLabel.Neutral)
                 .ToList();
 
             if (allEmotions.Count == 0) return null;
 
-            var clusters = new Dictionary<string, double>();
+            var labelSums = new Dictionary<string, double>();
             foreach (var (label, conf) in allEmotions)
             {
-                var cluster = label.ToCluster().ToString().ToLower();
-                clusters[cluster] = clusters.GetValueOrDefault(cluster) + conf;
+                var key = label.ToString().ToLower();
+                labelSums[key] = labelSums.GetValueOrDefault(key) + conf;
             }
 
-            var total = clusters.Values.Sum();
+            var total = labelSums.Values.Sum();
             if (total <= 0) return null;
 
-            return clusters.ToDictionary(kv => kv.Key, kv => Math.Round(kv.Value / total, 3));
+            return labelSums
+                .Where(kv => kv.Value > 0)
+                .ToDictionary(kv => kv.Key, kv => Math.Round(kv.Value / total, 3));
         }
 
         /// <summary>

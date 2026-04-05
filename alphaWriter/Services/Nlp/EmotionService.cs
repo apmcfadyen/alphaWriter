@@ -55,6 +55,7 @@ namespace alphaWriter.Services.Nlp
                 ct.ThrowIfCancellationRequested();
 
                 var modelPath = _modelManager.GetModelPath(NlpModelManager.EmotionModelName);
+                OrtEnv.Instance().DisableTelemetryEvents();
                 var options = new SessionOptions();
                 options.InterOpNumThreads = 1;
                 options.IntraOpNumThreads = Math.Max(1, Environment.ProcessorCount / 2);

@@ -1,3 +1,4 @@
+using alphaWriter.Models.Analysis;
 using System;
 using System.IO;
 using System.Security.Cryptography;
@@ -63,6 +64,37 @@ namespace alphaWriter.Services.Nlp
             if (File.Exists(path))
                 File.Delete(path);
         }
+
+        public PersistedAnalysisData? LoadAnalysisResults(string bookId)
+        {
+            var path = GetAnalysisPath(bookId);
+            if (!File.Exists(path)) return null;
+
+            try
+            {
+                var json = File.ReadAllText(path);
+                return JsonSerializer.Deserialize<PersistedAnalysisData>(json);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        public async Task SaveAnalysisResultsAsync(string bookId, PersistedAnalysisData data)
+        {
+            var dir = Path.Combine(_cacheDir, bookId);
+            Directory.CreateDirectory(dir);
+
+            var path = GetAnalysisPath(bookId);
+            var tmpPath = path + ".tmp";
+            var json = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
+            await File.WriteAllTextAsync(tmpPath, json);
+            File.Move(tmpPath, path, overwrite: true);
+        }
+
+        private string GetAnalysisPath(string bookId)
+            => Path.Combine(_cacheDir, bookId, "analysis-results.json");
 
         private string GetCachePath(string bookId, string sceneId)
             => Path.Combine(_cacheDir, bookId, $"{sceneId}.json");

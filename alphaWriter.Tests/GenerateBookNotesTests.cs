@@ -68,9 +68,9 @@ public class GenerateBookNotesTests
         var notes = NlpAnalysisService.GenerateBookNotes(results, CreateTestBook());
 
         // No dialogue density or contraction anomalies expected
-        Assert.DoesNotContain(notes, n => n.Category == NlpNoteCategory.Style &&
+        Assert.DoesNotContain(notes, n => n.Category == NlpNoteCategory.DevelopmentalEditor &&
             n.Message.Contains("dialogue"));
-        Assert.DoesNotContain(notes, n => n.Category == NlpNoteCategory.Voice &&
+        Assert.DoesNotContain(notes, n => n.Category == NlpNoteCategory.LineEditor &&
             n.Message.Contains("contraction"));
     }
 
@@ -91,7 +91,7 @@ public class GenerateBookNotesTests
         var notes = NlpAnalysisService.GenerateBookNotes(results, CreateTestBook());
 
         Assert.Contains(notes, n =>
-            n.Category == NlpNoteCategory.Style &&
+            n.Category == NlpNoteCategory.DevelopmentalEditor &&
             n.SceneTitle == "All Talk" &&
             n.Message.Contains("dialogue"));
     }
@@ -113,7 +113,7 @@ public class GenerateBookNotesTests
         var notes = NlpAnalysisService.GenerateBookNotes(results, CreateTestBook());
 
         Assert.Contains(notes, n =>
-            n.Category == NlpNoteCategory.Voice &&
+            n.Category == NlpNoteCategory.LineEditor &&
             n.SceneTitle == "Formal Scene" &&
             n.Message.Contains("contraction"));
     }
@@ -139,7 +139,7 @@ public class GenerateBookNotesTests
         var notes = NlpAnalysisService.GenerateBookNotes(results, CreateTestBook());
 
         Assert.Contains(notes, n =>
-            n.Category == NlpNoteCategory.Structure &&
+            n.Category == NlpNoteCategory.DevelopmentalEditor &&
             n.ChapterTitle == "Ch9" &&
             n.Message.Contains("longer"));
     }
@@ -167,7 +167,7 @@ public class GenerateBookNotesTests
         var notes = NlpAnalysisService.GenerateBookNotes(results, CreateTestBook());
 
         Assert.Contains(notes, n =>
-            n.Category == NlpNoteCategory.Pacing &&
+            n.Category == NlpNoteCategory.DevelopmentalEditor &&
             n.SceneTitle == "Verbose Opening" &&
             n.Message.Contains("opens"));
     }
@@ -195,7 +195,7 @@ public class GenerateBookNotesTests
         var notes = NlpAnalysisService.GenerateBookNotes(results, CreateTestBook());
 
         Assert.Contains(notes, n =>
-            n.Category == NlpNoteCategory.Pacing &&
+            n.Category == NlpNoteCategory.DevelopmentalEditor &&
             n.SceneTitle == "Verbose Close" &&
             n.Message.Contains("closes"));
     }

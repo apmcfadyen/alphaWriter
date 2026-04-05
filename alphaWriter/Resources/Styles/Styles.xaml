@@ -114,6 +114,16 @@
         <Setter Property="HorizontalOptions" Value="Fill" />
     </Style>
 
+    <!-- Breadcrumb navigation button -->
+    <Style x:Key="BreadcrumbButton" TargetType="Button">
+        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="TextColor" Value="{StaticResource AccentPrimary}" />
+        <Setter Property="BorderWidth" Value="0" />
+        <Setter Property="CornerRadius" Value="3" />
+        <Setter Property="Margin" Value="0" />
+        <Setter Property="FontSize" Value="12" />
+    </Style>
+
     <!-- Field label in element detail editor -->
     <Style x:Key="FieldLabel" TargetType="Label">
         <Setter Property="TextColor" Value="{StaticResource TextSecondary}" />

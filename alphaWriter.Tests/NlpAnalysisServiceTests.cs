@@ -91,7 +91,7 @@ public class NlpAnalysisServiceTests
         var progressMessages = new List<string>();
         var progress = new Progress<string>(msg => progressMessages.Add(msg));
 
-        var (notes, results) = await service.AnalyzeBookAsync(book, progress);
+        var (notes, results, _, _) = await service.AnalyzeBookAsync(book, progress);
 
         // Should have analyzed both chapters
         Assert.NotNull(notes);
@@ -153,12 +153,12 @@ public class NlpAnalysisServiceTests
         });
 
         book.Chapters.Add(chapter);
-        var (notes, _) = await service.AnalyzeBookAsync(book);
+        var (notes, _, _, _) = await service.AnalyzeBookAsync(book);
 
         // Should flag the short scene as undersized and the long scene for pacing
-        Assert.Contains(notes, n => n.Category == NlpNoteCategory.Structure
+        Assert.Contains(notes, n => n.Category == NlpNoteCategory.DevelopmentalEditor
             && n.SceneTitle == "Short");
-        Assert.Contains(notes, n => n.Category == NlpNoteCategory.Pacing
+        Assert.Contains(notes, n => n.Category == NlpNoteCategory.DevelopmentalEditor
             && n.SceneTitle == "Very Long Scene");
     }
 }

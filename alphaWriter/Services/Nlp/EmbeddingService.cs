@@ -42,6 +42,7 @@ namespace alphaWriter.Services.Nlp
                 ct.ThrowIfCancellationRequested();
 
                 var modelPath = _modelManager.GetModelPath(NlpModelManager.EmbeddingModelName);
+                OrtEnv.Instance().DisableTelemetryEvents();
                 var options = new SessionOptions();
                 options.InterOpNumThreads = 1;
                 options.IntraOpNumThreads = Math.Max(1, Environment.ProcessorCount / 2);

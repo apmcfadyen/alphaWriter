@@ -15,7 +15,7 @@ namespace alphaWriter.Services.Nlp
         Task<List<SceneAnalysisResult>> AnalyzeChapterAsync(Chapter chapter, Book book,
             CancellationToken ct = default);
 
-        Task<(List<NlpNote> Notes, List<SceneAnalysisResult> Results)> AnalyzeBookAsync(Book book,
+        Task<(List<NlpNote> Notes, List<SceneAnalysisResult> Results, List<CharacterVoiceProfile> VoiceProfiles, List<DialogueVoiceProfile> DialogueProfiles)> AnalyzeBookAsync(Book book,
             IProgress<string>? progress = null, CancellationToken ct = default);
     }
 }

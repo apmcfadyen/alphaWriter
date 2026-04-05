@@ -34,8 +34,13 @@ public class ViewModelTests
         var imageServiceMock = new Mock<IImageService>();
         var nlpServiceMock = new Mock<INlpAnalysisService>();
         var modelManagerMock = new Mock<INlpModelManager>();
+        var nerServiceMock = new Mock<INerService>();
+        var posTaggingMock = new Mock<IPosTaggingService>();
+        var locationHeuristicMock = new Mock<ILocationHeuristicService>();
+        var nlpCacheServiceMock = new Mock<INlpCacheService>();
         return new WriterViewModel(bookServiceMock.Object, imageServiceMock.Object,
-            nlpServiceMock.Object, modelManagerMock.Object);
+            nlpServiceMock.Object, modelManagerMock.Object, nerServiceMock.Object,
+            posTaggingMock.Object, locationHeuristicMock.Object, nlpCacheServiceMock.Object);
     }
 
     /// <summary>
@@ -434,11 +439,11 @@ public class ViewModelTests
     {
         var notes = new List<NlpNote>
         {
-            new() { Severity = NlpNoteSeverity.Issue, Category = NlpNoteCategory.Style, Message = "Style issue", ChapterTitle = "Ch1", SceneTitle = "S1" },
-            new() { Severity = NlpNoteSeverity.Warning, Category = NlpNoteCategory.Pacing, Message = "Pacing warning", ChapterTitle = "Ch1", SceneTitle = "S1" },
-            new() { Severity = NlpNoteSeverity.Info, Category = NlpNoteCategory.Voice, Message = "Voice info", ChapterTitle = "Ch1", SceneTitle = "S2" },
-            new() { Severity = NlpNoteSeverity.Warning, Category = NlpNoteCategory.Emotion, Message = "Emotion warning", ChapterTitle = "Ch2", SceneTitle = "S3" },
-            new() { Severity = NlpNoteSeverity.Info, Category = NlpNoteCategory.Style, Message = "Style info", ChapterTitle = "Ch2", SceneTitle = "S4" },
+            new() { Severity = NlpNoteSeverity.Issue, Category = NlpNoteCategory.CopyEditor, Message = "Copy editor issue", ChapterTitle = "Ch1", SceneTitle = "S1" },
+            new() { Severity = NlpNoteSeverity.Warning, Category = NlpNoteCategory.DevelopmentalEditor, Message = "Dev editor warning", ChapterTitle = "Ch1", SceneTitle = "S1" },
+            new() { Severity = NlpNoteSeverity.Info, Category = NlpNoteCategory.LineEditor, Message = "Line editor info", ChapterTitle = "Ch1", SceneTitle = "S2" },
+            new() { Severity = NlpNoteSeverity.Warning, Category = NlpNoteCategory.LineEditor, Message = "Line editor warning", ChapterTitle = "Ch2", SceneTitle = "S3" },
+            new() { Severity = NlpNoteSeverity.Info, Category = NlpNoteCategory.CopyEditor, Message = "Copy editor info", ChapterTitle = "Ch2", SceneTitle = "S4" },
         };
 
         // Set the private _allNotes and _analysisResults fields
@@ -456,7 +461,7 @@ public class ViewModelTests
         SetupAnalysisResults(vm);
 
         // Toggle to a non-default value first so the change handler fires when set back
-        vm.SelectedCategoryFilter = "Style";
+        vm.SelectedCategoryFilter = "Copy Editor";
         vm.SelectedCategoryFilter = "All";
 
         Assert.Equal(5, vm.NlpNotes.Count);
@@ -468,10 +473,10 @@ public class ViewModelTests
         var vm = CreateViewModel(out _);
         SetupAnalysisResults(vm);
 
-        vm.SelectedCategoryFilter = "Style";
+        vm.SelectedCategoryFilter = "Copy Editor";
 
         Assert.Equal(2, vm.NlpNotes.Count);
-        Assert.All(vm.NlpNotes, n => Assert.Equal(NlpNoteCategory.Style, n.Category));
+        Assert.All(vm.NlpNotes, n => Assert.Equal(NlpNoteCategory.CopyEditor, n.Category));
     }
 
     [Fact]
@@ -492,11 +497,11 @@ public class ViewModelTests
         var vm = CreateViewModel(out _);
         SetupAnalysisResults(vm);
 
-        vm.SelectedCategoryFilter = "Style";
+        vm.SelectedCategoryFilter = "Copy Editor";
         vm.SelectedSeverityFilter = "Issue";
 
         Assert.Single(vm.NlpNotes);
-        Assert.Equal("Style issue", vm.NlpNotes[0].Message);
+        Assert.Equal("Copy editor issue", vm.NlpNotes[0].Message);
     }
 
     [Fact]
@@ -506,7 +511,7 @@ public class ViewModelTests
         SetupAnalysisResults(vm);
 
         // Trigger filter by toggling category
-        vm.SelectedCategoryFilter = "Style";
+        vm.SelectedCategoryFilter = "Copy Editor";
         vm.SelectedCategoryFilter = "All";
 
         // Issue should come first, then Warning, then Info
@@ -524,7 +529,7 @@ public class ViewModelTests
         SetupAnalysisResults(vm);
 
         // Trigger filter to populate NlpNotes
-        vm.SelectedCategoryFilter = "Style";
+        vm.SelectedCategoryFilter = "Copy Editor";
         vm.SelectedCategoryFilter = "All";
         Assert.True(vm.NlpNotes.Count > 0);
         Assert.True(vm.HasAnalysisResults);

@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("alphaWriter.Tests")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+f45aeb2786711f67837cc98f08fae96b4e041fc5")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+82d79db5447e16ffcef7aef1b8490283bec88ef1")]
 [assembly: System.Reflection.AssemblyProductAttribute("alphaWriter.Tests")]
 [assembly: System.Reflection.AssemblyTitleAttribute("alphaWriter.Tests")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

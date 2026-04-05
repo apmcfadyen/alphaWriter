@@ -4,14 +4,24 @@
         <name>alphaWriter</name>
     </assembly>
     <members>
+        <member name="T:alphaWriter.Messages.EntitiesChangedMessage">
+            <summary>Sent when entity names/aliases change so the editor can re-highlight.</summary>
+        </member>
+        <member name="T:alphaWriter.Messages.AnalysisResultsAvailableMessage">
+            <summary>Sent when analysis completes or is loaded from cache, so the bottom panel can refresh.</summary>
+        </member>
+        <member name="T:alphaWriter.Messages.RequestReportRefreshMessage">
+            <summary>Sent when the reports panel should load/refresh its WebView content.</summary>
+        </member>
+        <member name="T:alphaWriter.Messages.NavigateToSentenceMessage">
+            <summary>Sent to navigate the editor to a specific scene and optionally a sentence.</summary>
+        </member>
+        <member name="T:alphaWriter.Messages.RightPanelRequestMessage">
+            <summary>Sent when a right-panel content request is made (book info, element editor).</summary>
+        </member>
         <member name="T:alphaWriter.Models.Analysis.EmotionLabel">
             <summary>
             The 28 GoEmotions fine-grained emotion labels from SamLowe/roberta-base-go_emotions.
-            </summary>
-        </member>
-        <member name="T:alphaWriter.Models.Analysis.EmotionCluster">
-            <summary>
-            Seven macro-categories that group the 28 GoEmotions labels for high-level reporting.
             </summary>
         </member>
         <member name="P:alphaWriter.Models.Book.DailyWordSnapshots">
@@ -24,6 +34,49 @@
             <summary>
             Returns all words from the scene's HTML content as lowercase strings,
             with HTML, comments, and entities stripped. Used for statistics.
+            </summary>
+        </member>
+        <member name="T:alphaWriter.Services.Nlp.CatalystInitializer">
+            <summary>
+            Ensures Catalyst's model storage is initialized exactly once,
+            shared across PosTaggingService and NerService.
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Services.Nlp.DialogueSpeakerAttributor.BuildNameLookup(System.Collections.Generic.IReadOnlyList{alphaWriter.Models.Character})">
+            <summary>
+            Builds a case-insensitive lookup from character names/aliases to character IDs.
+            Longer names are tried first during matching to avoid partial hits.
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Services.Nlp.DialogueSpeakerAttributor.AttributeDialogue(System.Collections.Generic.List{alphaWriter.Models.Analysis.SentenceAnalysis},System.String,System.Collections.Generic.IReadOnlyDictionary{System.String,System.String},System.Collections.Generic.IReadOnlyList{alphaWriter.Models.Character})">
+            <summary>
+            Attributes dialogue sentences to characters using speech tag heuristics.
+            Only sentences with explicit speech attribution tags are matched.
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Services.Nlp.DialogueSpeakerAttributor.ExtractDialogueText(System.String)">
+            <summary>
+            Extracts the quoted dialogue text from a sentence, stripping outer quotes.
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Services.Nlp.ICharacterVoiceAnalyzer.BuildProfiles(System.Collections.Generic.List{alphaWriter.Models.Analysis.SceneAnalysisResult},alphaWriter.Models.Book,alphaWriter.Services.Nlp.IPosTaggingService)">
+            <summary>
+            Builds a voice profile for each character with a viewpoint role.
+            When <paramref name="posService"/> is provided (and loaded), the profile
+            is extended with POS-dependent metrics: PassiveVoiceRate, OpenerVariety,
+            ClauseComplexity, and per-scene SceneSnapshots for the consistency timeline.
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Services.Nlp.ICharacterVoiceAnalyzer.BuildDialogueProfiles(System.Collections.Generic.List{alphaWriter.Models.Analysis.SceneAnalysisResult},alphaWriter.Models.Book,alphaWriter.Services.Nlp.IPosTaggingService)">
+            <summary>
+            Builds a dialogue voice profile for each character with attributed speech lines.
+            Uses speech tag heuristics to attribute dialogue to characters.
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Services.Nlp.ICharacterVoiceAnalyzer.DetectDialogueVoiceAnomalies(System.Collections.Generic.List{alphaWriter.Models.Analysis.DialogueVoiceProfile})">
+            <summary>
+            Detects cross-character voice similarity — flags pairs of characters whose
+            dialogue fingerprints are too alike.
             </summary>
         </member>
         <member name="M:alphaWriter.Services.Nlp.IEmbeddingService.UnloadModel">
@@ -43,6 +96,147 @@
             <summary>
             Releases the ONNX session and tokenizer to free memory.
             The model can be reloaded with LoadModelAsync.
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Services.Nlp.ILocationHeuristicService.FindLocationCandidates(System.Collections.Generic.IReadOnlyList{System.String},System.Collections.Generic.IReadOnlyList{System.ValueTuple{System.String,System.String}}[],System.Collections.Generic.IReadOnlySet{System.String})">
+            <summary>
+            Scans POS-tagged sentences for spatial-preposition + proper-noun patterns
+            that suggest location names. Filters out entities that co-occur with
+            personal pronouns (likely characters) and any names in <paramref name="knownCharacterNames"/>.
+            Returns deduplicated (Name, Count) sorted by descending frequency.
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Services.Nlp.INerService.ExtractEntities(System.Collections.Generic.IReadOnlyList{System.String})">
+            <summary>
+            Runs WikiNER on the provided sentences and returns a deduplicated list
+            of (Name, EntityType, Count) sorted by descending frequency.
+            </summary>
+        </member>
+        <member name="P:alphaWriter.Services.Nlp.INerService.LastRawEntityTypes">
+            <summary>
+            The raw entity type label strings seen in the last ExtractEntities call
+            (e.g. "Person", "Organization", "Location"). Useful for diagnosing
+            unexpected label names when results are empty.
+            </summary>
+        </member>
+        <member name="T:alphaWriter.Services.Nlp.IPosTaggingService">
+            <summary>
+            Wraps a POS-tagging pipeline (Catalyst) for per-token part-of-speech labels.
+            Pos values follow Universal Dependencies: VERB, AUX, ADJ, ADV, NOUN, etc.
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Services.Nlp.IPosTaggingService.LoadAsync(System.Threading.CancellationToken)">
+            <summary>Downloads (first run) and loads the English POS model.</summary>
+        </member>
+        <member name="M:alphaWriter.Services.Nlp.IPosTaggingService.UnloadModel">
+            <summary>Releases the pipeline from memory; reloadable via LoadAsync.</summary>
+        </member>
+        <member name="M:alphaWriter.Services.Nlp.IPosTaggingService.TagSentences(System.Collections.Generic.IReadOnlyList{System.String})">
+            <summary>
+            Tags each sentence and returns an array — one element per sentence —
+            of (Value, Pos) token tuples.
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Services.Nlp.IStyleAnalyzer.Analyze(System.Collections.Generic.IReadOnlyList{System.String})">
+            <summary>
+            Computes a StyleProfile from raw sentences, including ReadabilityScore.
+            Does not require POS tagging.
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Services.Nlp.IStyleAnalyzer.AnalyzeExtended(System.Collections.Generic.IReadOnlyList{System.String},alphaWriter.Services.Nlp.IPosTaggingService)">
+            <summary>
+            Computes a full StyleProfile including ReadabilityScore.
+            When <paramref name="posService"/> is provided, also populates
+            OpenerVariety and ClauseComplexity.
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Services.Nlp.IStyleAnalyzer.DetectPassiveVoice(System.Collections.Generic.IReadOnlyList{System.String},alphaWriter.Services.Nlp.IPosTaggingService,System.String,System.String,System.String)">
+            <summary>
+            Flags sentences that use passive voice (AUX be-verb + VERB pattern).
+            Requires a loaded <paramref name="posService"/> for accurate VERB vs ADJ
+            disambiguation — e.g. "was tired" (ADJ) is NOT flagged, "was defeated" (VERB) IS.
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Services.Nlp.IStyleAnalyzer.DetectAdverbDensity(System.Collections.Generic.IReadOnlyList{System.String},System.String,System.String,System.String)">
+            <summary>
+            Flags sentences with ≥ 2 -ly adverbs, and emits a scene-level summary note
+            when overall adverb density exceeds 3% of total words.
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Services.Nlp.IStyleAnalyzer.DetectShowDontTell(System.Collections.Generic.IReadOnlyList{System.String},System.String,System.String,System.String)">
+            <summary>
+            Flags sentences that directly name a character's emotion rather than showing it
+            through action or physical sensation ("felt angry" vs "her hands clenched").
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Services.Nlp.IStyleAnalyzer.DetectProximityEchoes(System.Collections.Generic.IReadOnlyList{System.String},System.String,System.String,System.String)">
+            <summary>
+            Detects when the same content word recurs in 3+ sentences within a
+            5-sentence window — audible echo even when readers cannot name it.
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Services.Nlp.IStyleAnalyzer.DetectSentenceOpenerMonotony(System.Collections.Generic.IReadOnlyList{System.String},alphaWriter.Services.Nlp.IPosTaggingService,System.String,System.String,System.String)">
+            <summary>
+            Flags when >60% of sentences in a scene open with the same grammatical
+            category, creating a monotonous rhythmic pattern.
+            Requires a loaded <paramref name="posService"/>.
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Services.Nlp.IStyleAnalyzer.DetectSubordinateClauseDensity(System.Collections.Generic.IReadOnlyList{System.String},System.String,System.String,System.String)">
+            <summary>
+            Flags sentences with an unusually high count of subordinating conjunctions
+            and scenes where the structural complexity is consistently elevated.
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Services.Nlp.IStyleAnalyzer.ComputeAdverbDensity(System.Collections.Generic.IReadOnlyList{System.String})">
+            <summary>
+            Returns the fraction of total words that are -ly adverbs.
+            Used by CharacterVoiceAnalyzer to populate AdverbDensity.
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Services.Nlp.IStyleAnalyzer.CountPassiveSentences(System.Collections.Generic.IReadOnlyList{System.String},alphaWriter.Services.Nlp.IPosTaggingService)">
+            <summary>
+            Returns the number of sentences that contain a passive construction.
+            Used by CharacterVoiceAnalyzer to populate PassiveVoiceRate.
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Services.Nlp.LocationHeuristicService.ExtractLocationName(System.Collections.Generic.IReadOnlyList{System.ValueTuple{System.String,System.String}},System.Int32)">
+            <summary>
+            Starting at <paramref name="startIndex"/>, skips an optional DET token,
+            then collects consecutive PROPN or capitalized NOUN tokens as a location name.
+            Returns null if no proper noun is found.
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Services.Nlp.LocationHeuristicService.ExtractProperNounSequence(System.Collections.Generic.IReadOnlyList{System.ValueTuple{System.String,System.String}},System.Int32)">
+            <summary>
+            Collects consecutive PROPN tokens or capitalized NOUN tokens starting at index.
+            Returns null if no qualifying token is found.
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Services.Nlp.LocationHeuristicService.ContainsName(System.Collections.Generic.IReadOnlyList{System.ValueTuple{System.String,System.String}},System.String)">
+            <summary>
+            Checks if the candidate name appears in the token sequence.
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Services.Nlp.LocationHeuristicService.HasPronounAdjacentToName(System.Collections.Generic.IReadOnlyList{System.ValueTuple{System.String,System.String}},System.String)">
+            <summary>
+            Checks if a personal pronoun appears within 2 tokens of the candidate name
+            in the tagged sentence. This catches patterns like "He told Marcus" or
+            "Marcus, he said" where the name is used as a character, not a location.
+            </summary>
+        </member>
+        <member name="P:alphaWriter.Services.Nlp.NerService.LastRawEntityTypes">
+            <summary>
+            Raw entity type strings seen in the last ExtractEntities call, before TagMap
+            filtering. Populated when at least one entity span was found but had an
+            unmapped type — used to surface diagnostic info to the UI.
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Services.Nlp.NerService.EnsureWikiNerExtractedAsync(System.Threading.CancellationToken)">
+            <summary>
+            Extracts <c>wikiner.bin</c> from <c>Catalyst.Models.English</c>'s embedded resources
+            into the Catalyst DiskStorage path if it isn't already there.
+            DiskStorage path format: Models/en/AveragePerceptronEntityRecognizer/v{ver:D6}/model-{tag}-v{ver:D6}.bin
             </summary>
         </member>
         <member name="M:alphaWriter.Services.Nlp.NlpAnalysisService.ClassifyEmotionsBatched(alphaWriter.Models.Analysis.SceneAnalysisResult,System.Threading.CancellationToken)">
@@ -83,6 +277,75 @@
             Detects whether a sentence contains a contraction (e.g., don't, I'm, we've).
             </summary>
         </member>
+        <member name="T:alphaWriter.Services.Nlp.PosTaggingService">
+            <summary>
+            Wraps the Catalyst NLP pipeline for English POS tagging.
+            </summary>
+        </member>
+        <member name="T:alphaWriter.Services.WriterState">
+            <summary>
+            Shared application state injected into all ViewModels.
+            Holds Books, selection state, and the persistence mechanism.
+            </summary>
+            <inheritdoc/>
+        </member>
+        <member name="P:alphaWriter.Services.WriterState.Books">
+            <inheritdoc cref="F:alphaWriter.Services.WriterState.books"/>
+        </member>
+        <member name="P:alphaWriter.Services.WriterState.SelectedBook">
+            <inheritdoc cref="F:alphaWriter.Services.WriterState.selectedBook"/>
+        </member>
+        <member name="P:alphaWriter.Services.WriterState.SelectedChapter">
+            <inheritdoc cref="F:alphaWriter.Services.WriterState.selectedChapter"/>
+        </member>
+        <member name="P:alphaWriter.Services.WriterState.SelectedScene">
+            <inheritdoc cref="F:alphaWriter.Services.WriterState.selectedScene"/>
+        </member>
+        <member name="P:alphaWriter.Services.WriterState.SelectedCharacter">
+            <inheritdoc cref="F:alphaWriter.Services.WriterState.selectedCharacter"/>
+        </member>
+        <member name="P:alphaWriter.Services.WriterState.SelectedLocation">
+            <inheritdoc cref="F:alphaWriter.Services.WriterState.selectedLocation"/>
+        </member>
+        <member name="P:alphaWriter.Services.WriterState.SelectedItem">
+            <inheritdoc cref="F:alphaWriter.Services.WriterState.selectedItem"/>
+        </member>
+        <member name="M:alphaWriter.Services.WriterState.OnSelectedBookChanged(alphaWriter.Models.Book)">
+            <summary>Executes the logic for when <see cref="P:alphaWriter.Services.WriterState.SelectedBook"/> just changed.</summary>
+            <param name="value">The new property value that was set.</param>
+            <remarks>This method is invoked right after the value of <see cref="P:alphaWriter.Services.WriterState.SelectedBook"/> is changed.</remarks>
+        </member>
+        <member name="M:alphaWriter.Services.WriterState.OnSelectedChapterChanged(alphaWriter.Models.Chapter)">
+            <summary>Executes the logic for when <see cref="P:alphaWriter.Services.WriterState.SelectedChapter"/> just changed.</summary>
+            <param name="value">The new property value that was set.</param>
+            <remarks>This method is invoked right after the value of <see cref="P:alphaWriter.Services.WriterState.SelectedChapter"/> is changed.</remarks>
+        </member>
+        <member name="M:alphaWriter.Services.WriterState.OnSelectedSceneChanged(alphaWriter.Models.Scene)">
+            <summary>Executes the logic for when <see cref="P:alphaWriter.Services.WriterState.SelectedScene"/> just changed.</summary>
+            <param name="value">The new property value that was set.</param>
+            <remarks>This method is invoked right after the value of <see cref="P:alphaWriter.Services.WriterState.SelectedScene"/> is changed.</remarks>
+        </member>
+        <member name="M:alphaWriter.Services.WriterState.OnSelectedCharacterChanged(alphaWriter.Models.Character)">
+            <summary>Executes the logic for when <see cref="P:alphaWriter.Services.WriterState.SelectedCharacter"/> just changed.</summary>
+            <param name="value">The new property value that was set.</param>
+            <remarks>This method is invoked right after the value of <see cref="P:alphaWriter.Services.WriterState.SelectedCharacter"/> is changed.</remarks>
+        </member>
+        <member name="M:alphaWriter.Services.WriterState.OnSelectedLocationChanged(alphaWriter.Models.Location)">
+            <summary>Executes the logic for when <see cref="P:alphaWriter.Services.WriterState.SelectedLocation"/> just changed.</summary>
+            <param name="value">The new property value that was set.</param>
+            <remarks>This method is invoked right after the value of <see cref="P:alphaWriter.Services.WriterState.SelectedLocation"/> is changed.</remarks>
+        </member>
+        <member name="M:alphaWriter.Services.WriterState.OnSelectedItemChanged(alphaWriter.Models.Item)">
+            <summary>Executes the logic for when <see cref="P:alphaWriter.Services.WriterState.SelectedItem"/> just changed.</summary>
+            <param name="value">The new property value that was set.</param>
+            <remarks>This method is invoked right after the value of <see cref="P:alphaWriter.Services.WriterState.SelectedItem"/> is changed.</remarks>
+        </member>
+        <member name="T:alphaWriter.ViewModels.NerCandidateViewModel">
+            <inheritdoc/>
+        </member>
+        <member name="P:alphaWriter.ViewModels.NerCandidateViewModel.IsSelected">
+            <inheritdoc cref="F:alphaWriter.ViewModels.NerCandidateViewModel.isSelected"/>
+        </member>
         <member name="T:alphaWriter.ViewModels.SceneEntityOption">
              <summary>
              Represents a single character, location, or item in the scene-entity
@@ -112,6 +375,12 @@
             <inheritdoc cref="F:alphaWriter.ViewModels.ViewpointOption.isSelected"/>
         </member>
         <member name="T:alphaWriter.ViewModels.WriterViewModel">
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
+            <inheritdoc/>
             <inheritdoc/>
             <inheritdoc/>
             <inheritdoc/>
@@ -193,6 +462,13 @@
         <member name="M:alphaWriter.ViewModels.WriterViewModel.BuildNlpReportJson">
             <summary>
             Builds a JSON string with all analysis data needed by the NLP report HTML.
+            </summary>
+        </member>
+        <member name="M:alphaWriter.ViewModels.WriterViewModel.BuildHeatMapJson">
+            <summary>
+            Builds per-sentence heat map data for the currently selected scene.
+            Returns a JSON object: { sentences: [{ index, flags: [] }], echoWords: ["word",...] }
+            where flags is a subset of: "passive", "adverbs", "show-dont-tell", "long", "echo"
             </summary>
         </member>
         <member name="M:alphaWriter.ViewModels.WriterViewModel.BuildEntityRelationshipJson">
@@ -287,6 +563,12 @@
         <member name="P:alphaWriter.ViewModels.WriterViewModel.AnalysisProgress">
             <inheritdoc cref="F:alphaWriter.ViewModels.WriterViewModel.analysisProgress"/>
         </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.AnalysisStatusText">
+            <inheritdoc cref="F:alphaWriter.ViewModels.WriterViewModel.analysisStatusText"/>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.AnalysisStatusColor">
+            <inheritdoc cref="F:alphaWriter.ViewModels.WriterViewModel.analysisStatusColor"/>
+        </member>
         <member name="P:alphaWriter.ViewModels.WriterViewModel.SelectedCategoryFilter">
             <inheritdoc cref="F:alphaWriter.ViewModels.WriterViewModel.selectedCategoryFilter"/>
         </member>
@@ -298,6 +580,36 @@
         </member>
         <member name="P:alphaWriter.ViewModels.WriterViewModel.EntityPreview">
             <inheritdoc cref="F:alphaWriter.ViewModels.WriterViewModel.entityPreview"/>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.CharacterCandidates">
+            <inheritdoc cref="F:alphaWriter.ViewModels.WriterViewModel.characterCandidates"/>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.LocationCandidates">
+            <inheritdoc cref="F:alphaWriter.ViewModels.WriterViewModel.locationCandidates"/>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.ItemCandidates">
+            <inheritdoc cref="F:alphaWriter.ViewModels.WriterViewModel.itemCandidates"/>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.HasCharacterCandidates">
+            <inheritdoc cref="F:alphaWriter.ViewModels.WriterViewModel.hasCharacterCandidates"/>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.HasLocationCandidates">
+            <inheritdoc cref="F:alphaWriter.ViewModels.WriterViewModel.hasLocationCandidates"/>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.HasItemCandidates">
+            <inheritdoc cref="F:alphaWriter.ViewModels.WriterViewModel.hasItemCandidates"/>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.IsScanning">
+            <inheritdoc cref="F:alphaWriter.ViewModels.WriterViewModel.isScanning"/>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.ScanProgress">
+            <inheritdoc cref="F:alphaWriter.ViewModels.WriterViewModel.scanProgress"/>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.BreadcrumbItems">
+            <inheritdoc cref="F:alphaWriter.ViewModels.WriterViewModel.breadcrumbItems"/>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.BreadcrumbPath">
+            <inheritdoc cref="F:alphaWriter.ViewModels.WriterViewModel.breadcrumbPath"/>
         </member>
         <member name="M:alphaWriter.ViewModels.WriterViewModel.OnSelectedBookChanged(alphaWriter.Models.Book)">
             <summary>Executes the logic for when <see cref="P:alphaWriter.ViewModels.WriterViewModel.SelectedBook"/> just changed.</summary>
@@ -430,6 +742,12 @@
         <member name="P:alphaWriter.ViewModels.WriterViewModel.RenameSceneCommand">
             <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IAsyncRelayCommand`1"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.RenameScene(alphaWriter.Models.Scene)"/>.</summary>
         </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.navigateToBreadcrumbCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.NavigateToBreadcrumbCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.NavigateToBreadcrumbCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IRelayCommand`1"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.NavigateToBreadcrumb(System.String)"/>.</summary>
+        </member>
         <member name="F:alphaWriter.ViewModels.WriterViewModel.toggleSidebarCommand">
             <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.ToggleSidebarCommand"/>.</summary>
         </member>
@@ -502,6 +820,30 @@
         <member name="P:alphaWriter.ViewModels.WriterViewModel.ClearAnalysisCommand">
             <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IRelayCommand"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.ClearAnalysis"/>.</summary>
         </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.scanEntitiesCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.ScanEntitiesCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.ScanEntitiesCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IAsyncRelayCommand"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.ScanEntities"/>.</summary>
+        </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.addCheckedCharactersCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.AddCheckedCharactersCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.AddCheckedCharactersCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IAsyncRelayCommand"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.AddCheckedCharacters"/>.</summary>
+        </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.addCheckedLocationsCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.AddCheckedLocationsCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.AddCheckedLocationsCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IAsyncRelayCommand"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.AddCheckedLocations"/>.</summary>
+        </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.addCheckedItemsCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.AddCheckedItemsCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.AddCheckedItemsCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IAsyncRelayCommand"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.AddCheckedItems"/>.</summary>
+        </member>
         <member name="F:alphaWriter.ViewModels.WriterViewModel.downloadModelsCommand">
             <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.DownloadModelsCommand"/>.</summary>
         </member>
@@ -531,6 +873,12 @@
         </member>
         <member name="P:alphaWriter.ViewModels.WriterViewModel.CloseReportsCommand">
             <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IRelayCommand"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.CloseReports"/>.</summary>
+        </member>
+        <member name="F:alphaWriter.ViewModels.WriterViewModel.navigateToNoteCommand">
+            <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.NavigateToNoteCommand"/>.</summary>
+        </member>
+        <member name="P:alphaWriter.ViewModels.WriterViewModel.NavigateToNoteCommand">
+            <summary>Gets an <see cref="T:CommunityToolkit.Mvvm.Input.IRelayCommand`1"/> instance wrapping <see cref="M:alphaWriter.ViewModels.WriterViewModel.NavigateToNote(alphaWriter.Models.Analysis.NlpNote)"/>.</summary>
         </member>
         <member name="F:alphaWriter.ViewModels.WriterViewModel.refreshStatisticsCommand">
             <summary>The backing field for <see cref="P:alphaWriter.ViewModels.WriterViewModel.RefreshStatisticsCommand"/>.</summary>
@@ -636,11 +984,26 @@
             rigid pixel dimensions that survive vis.js interaction redraws.
             </summary>
         </member>
-        <member name="M:alphaWriter.Views.WriterPage.BuildNlpReportHtml(System.String)">
+        <member name="M:alphaWriter.Views.WriterPage.BuildNlpReportHtml(System.String,System.String)">
             <summary>
             Builds a self-contained NLP analysis report with SVG charts.
             Includes: pacing heatmap, style consistency chart, emotion distribution,
             and a categorized notes list.
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Views.WriterPage.ReapplyHeatMapIfActiveAsync">
+            <summary>
+            Called when a new scene is loaded into the editor — reapplies the heat map
+            if it was active so overlays appear on the new content.
+            </summary>
+        </member>
+        <member name="M:alphaWriter.Views.WriterPage.NavigateToNoteAsync(System.String,System.Nullable{System.Int32})">
+            <summary>
+            Navigates the editor to the scene identified by <paramref name="sceneId"/>,
+            then scrolls to and flash-highlights the sentence at <paramref name="sentenceIndex"/>.
+            If the scene is already open, the scroll fires immediately.
+            If the scene must be switched, <see cref="F:alphaWriter.Views.WriterPage._pendingScrollSentenceIndex"/> is set
+            so <see cref="M:alphaWriter.Views.WriterPage.LoadSceneAsync(alphaWriter.Models.Scene)"/> applies the scroll after the content loads.
             </summary>
         </member>
         <member name="T:alphaWriter.Resource">
@@ -655,12 +1018,6 @@
             for all properties generated with <see cref="T:CommunityToolkit.Mvvm.ComponentModel.ObservablePropertyAttribute"/>.
             </summary>
         </member>
-        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.IsSelected">
-            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "IsSelected" generated properties.</summary>
-        </member>
-        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.IsAutoDetected">
-            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "IsAutoDetected" generated properties.</summary>
-        </member>
         <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.Books">
             <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "Books" generated properties.</summary>
         </member>
@@ -672,6 +1029,21 @@
         </member>
         <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.SelectedScene">
             <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "SelectedScene" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.SelectedCharacter">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "SelectedCharacter" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.SelectedLocation">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "SelectedLocation" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.SelectedItem">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "SelectedItem" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.IsSelected">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "IsSelected" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.IsAutoDetected">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "IsAutoDetected" generated properties.</summary>
         </member>
         <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.WordCount">
             <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "WordCount" generated properties.</summary>
@@ -687,15 +1059,6 @@
         </member>
         <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.SidebarMode">
             <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "SidebarMode" generated properties.</summary>
-        </member>
-        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.SelectedCharacter">
-            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "SelectedCharacter" generated properties.</summary>
-        </member>
-        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.SelectedLocation">
-            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "SelectedLocation" generated properties.</summary>
-        </member>
-        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.SelectedItem">
-            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "SelectedItem" generated properties.</summary>
         </member>
         <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.ViewpointOptions">
             <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "ViewpointOptions" generated properties.</summary>
@@ -745,6 +1108,12 @@
         <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.AnalysisProgress">
             <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "AnalysisProgress" generated properties.</summary>
         </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.AnalysisStatusText">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "AnalysisStatusText" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.AnalysisStatusColor">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "AnalysisStatusColor" generated properties.</summary>
+        </member>
         <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.SelectedCategoryFilter">
             <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "SelectedCategoryFilter" generated properties.</summary>
         </member>
@@ -757,17 +1126,44 @@
         <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.EntityPreview">
             <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "EntityPreview" generated properties.</summary>
         </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.CharacterCandidates">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "CharacterCandidates" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.LocationCandidates">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "LocationCandidates" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.ItemCandidates">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "ItemCandidates" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.HasCharacterCandidates">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "HasCharacterCandidates" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.HasLocationCandidates">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "HasLocationCandidates" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.HasItemCandidates">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "HasItemCandidates" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.IsScanning">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "IsScanning" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.ScanProgress">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "ScanProgress" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.HasScanProgress">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "HasScanProgress" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.BreadcrumbItems">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "BreadcrumbItems" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangingArgs.BreadcrumbPath">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangingEventArgs"/> instance for all "BreadcrumbPath" generated properties.</summary>
+        </member>
         <member name="T:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs">
             <summary>
             A helper type providing cached, reusable <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instances
             for all properties generated with <see cref="T:CommunityToolkit.Mvvm.ComponentModel.ObservablePropertyAttribute"/>.
             </summary>
-        </member>
-        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.IsSelected">
-            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "IsSelected" generated properties.</summary>
-        </member>
-        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.IsAutoDetected">
-            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "IsAutoDetected" generated properties.</summary>
         </member>
         <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.Books">
             <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "Books" generated properties.</summary>
@@ -780,6 +1176,21 @@
         </member>
         <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.SelectedScene">
             <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "SelectedScene" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.SelectedCharacter">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "SelectedCharacter" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.SelectedLocation">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "SelectedLocation" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.SelectedItem">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "SelectedItem" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.IsSelected">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "IsSelected" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.IsAutoDetected">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "IsAutoDetected" generated properties.</summary>
         </member>
         <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.WordCount">
             <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "WordCount" generated properties.</summary>
@@ -795,15 +1206,6 @@
         </member>
         <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.SidebarMode">
             <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "SidebarMode" generated properties.</summary>
-        </member>
-        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.SelectedCharacter">
-            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "SelectedCharacter" generated properties.</summary>
-        </member>
-        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.SelectedLocation">
-            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "SelectedLocation" generated properties.</summary>
-        </member>
-        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.SelectedItem">
-            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "SelectedItem" generated properties.</summary>
         </member>
         <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.ViewpointOptions">
             <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "ViewpointOptions" generated properties.</summary>
@@ -853,6 +1255,12 @@
         <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.AnalysisProgress">
             <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "AnalysisProgress" generated properties.</summary>
         </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.AnalysisStatusText">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "AnalysisStatusText" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.AnalysisStatusColor">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "AnalysisStatusColor" generated properties.</summary>
+        </member>
         <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.SelectedCategoryFilter">
             <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "SelectedCategoryFilter" generated properties.</summary>
         </member>
@@ -864,6 +1272,39 @@
         </member>
         <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.EntityPreview">
             <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "EntityPreview" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.CharacterCandidates">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "CharacterCandidates" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.LocationCandidates">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "LocationCandidates" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.ItemCandidates">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "ItemCandidates" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.HasCharacterCandidates">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "HasCharacterCandidates" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.HasLocationCandidates">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "HasLocationCandidates" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.HasItemCandidates">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "HasItemCandidates" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.IsScanning">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "IsScanning" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.ScanProgress">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "ScanProgress" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.HasScanProgress">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "HasScanProgress" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.BreadcrumbItems">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "BreadcrumbItems" generated properties.</summary>
+        </member>
+        <member name="F:CommunityToolkit.Mvvm.ComponentModel.__Internals.__KnownINotifyPropertyChangedArgs.BreadcrumbPath">
+            <summary>The cached <see cref="T:System.ComponentModel.PropertyChangedEventArgs"/> instance for all "BreadcrumbPath" generated properties.</summary>
         </member>
     </members>
 </doc>

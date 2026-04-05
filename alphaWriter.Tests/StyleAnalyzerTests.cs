@@ -94,7 +94,7 @@ public class StyleAnalyzerTests
         var scene = new StyleProfile { AverageSentenceLength = 25, SentenceLengthStdDev = 2, VocabularyRichness = 0.5, TotalSentences = 20 };
         var chapter = new StyleProfile { AverageSentenceLength = 10, SentenceLengthStdDev = 3, VocabularyRichness = 0.5, TotalSentences = 100 };
         var notes = _analyzer.DetectAnomalies(scene, chapter, "s1", "Long Scene", "Ch1");
-        Assert.Contains(notes, n => n.Category == NlpNoteCategory.Style && n.Severity == NlpNoteSeverity.Warning);
+        Assert.Contains(notes, n => n.Category == NlpNoteCategory.CopyEditor && n.Severity == NlpNoteSeverity.Warning);
     }
 
     [Fact]
@@ -103,7 +103,7 @@ public class StyleAnalyzerTests
         var scene = new StyleProfile { AverageSentenceLength = 10, SentenceLengthStdDev = 3, VocabularyRichness = 0.8, TotalSentences = 20 };
         var chapter = new StyleProfile { AverageSentenceLength = 10, SentenceLengthStdDev = 3, VocabularyRichness = 0.4, TotalSentences = 100 };
         var notes = _analyzer.DetectAnomalies(scene, chapter, "s1", "Rich Scene", "Ch1");
-        Assert.Contains(notes, n => n.Category == NlpNoteCategory.Style && n.Severity == NlpNoteSeverity.Info);
+        Assert.Contains(notes, n => n.Category == NlpNoteCategory.DevelopmentalEditor && n.Severity == NlpNoteSeverity.Info);
     }
 
     [Fact]

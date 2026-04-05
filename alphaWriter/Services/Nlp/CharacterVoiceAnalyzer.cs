@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using alphaWriter.Models;
 using alphaWriter.Models.Analysis;
 
@@ -15,7 +16,8 @@ namespace alphaWriter.Services.Nlp
             _styleAnalyzer = styleAnalyzer;
         }
 
-        public List<CharacterVoiceProfile> BuildProfiles(List<SceneAnalysisResult> results, Book book)
+        public List<CharacterVoiceProfile> BuildProfiles(List<SceneAnalysisResult> results, Book book,
+            IPosTaggingService? posService = null)
         {
             var profiles = new List<CharacterVoiceProfile>();
 
@@ -37,9 +39,19 @@ namespace alphaWriter.Services.Nlp
                 if (sentenceTexts.Count == 0)
                     continue;
 
-                var style = _styleAnalyzer.Analyze(sentenceTexts);
+                // Full style profile including readability score
+                var style = _styleAnalyzer.AnalyzeExtended(sentenceTexts, posService);
+
                 var emotionDist = ComputeEmotionDistribution(allSentences);
                 var distinctiveWords = ComputeDistinctiveWords(sentenceTexts, results);
+
+                double adverbDensity = _styleAnalyzer.ComputeAdverbDensity(sentenceTexts);
+                double passiveVoiceRate = posService != null && posService.IsLoaded && sentenceTexts.Count > 0
+                    ? (double)_styleAnalyzer.CountPassiveSentences(sentenceTexts, posService) / sentenceTexts.Count
+                    : 0;
+
+                // Build per-scene snapshots for the consistency timeline
+                var snapshots = BuildSceneSnapshots(viewpointScenes, posService);
 
                 profiles.Add(new CharacterVoiceProfile
                 {
@@ -49,11 +61,50 @@ namespace alphaWriter.Services.Nlp
                     EmotionDistribution = emotionDist,
                     DistinctiveWords = distinctiveWords,
                     SceneCount = viewpointScenes.Count,
-                    TotalWords = style.TotalWords
+                    TotalWords = style.TotalWords,
+                    AdverbDensity = adverbDensity,
+                    PassiveVoiceRate = passiveVoiceRate,
+                    OpenerVariety = style.OpenerVariety,
+                    ClauseComplexity = style.ClauseComplexity,
+                    ReadabilityScore = style.ReadabilityScore,
+                    SceneSnapshots = snapshots
                 });
             }
 
             return profiles;
+        }
+
+        private List<SceneVoiceSnapshot> BuildSceneSnapshots(
+            List<SceneAnalysisResult> scenes, IPosTaggingService? posService)
+        {
+            var snapshots = new List<SceneVoiceSnapshot>();
+
+            foreach (var scene in scenes)
+            {
+                var texts = scene.Sentences.Select(s => s.Text).ToList();
+                if (texts.Count == 0) continue;
+
+                var sceneStyle = _styleAnalyzer.AnalyzeExtended(texts, posService);
+                double adverb = _styleAnalyzer.ComputeAdverbDensity(texts);
+                double passive = posService != null && posService.IsLoaded && texts.Count > 0
+                    ? (double)_styleAnalyzer.CountPassiveSentences(texts, posService) / texts.Count
+                    : 0;
+
+                snapshots.Add(new SceneVoiceSnapshot
+                {
+                    SceneTitle = scene.SceneTitle,
+                    ChapterTitle = scene.ChapterTitle,
+                    AvgSentenceLength = sceneStyle.AverageSentenceLength,
+                    VocabularyRichness = sceneStyle.VocabularyRichness,
+                    ContractionRate = sceneStyle.ContractionRate,
+                    DialogueRatio = sceneStyle.DialogueRatio,
+                    AdverbDensity = adverb,
+                    PassiveVoiceRate = passive,
+                    ReadabilityScore = sceneStyle.ReadabilityScore
+                });
+            }
+
+            return snapshots;
         }
 
         public List<NlpNote> DetectVoiceAnomalies(List<CharacterVoiceProfile> profiles,
@@ -61,7 +112,6 @@ namespace alphaWriter.Services.Nlp
         {
             var notes = new List<NlpNote>();
 
-            // (a) Cross-scene voice consistency per character
             foreach (var profile in profiles)
             {
                 var viewpointScenes = results
@@ -73,9 +123,9 @@ namespace alphaWriter.Services.Nlp
 
                 DetectContractionInconsistency(profile, viewpointScenes, notes);
                 DetectDialogueRatioInconsistency(profile, viewpointScenes, notes);
+                DetectReadabilityDrift(profile, viewpointScenes, notes);
             }
 
-            // (b) Narrator voice drift within scenes
             DetectNarratorDrift(results, notes);
 
             return notes;
@@ -102,24 +152,28 @@ namespace alphaWriter.Services.Nlp
             double stdDev = Math.Sqrt(perSceneRates.Sum(r => Math.Pow(r.rate - avg, 2))
                 / (perSceneRates.Count - 1));
 
-            if (stdDev < 0.01) return; // negligible variation
+            if (stdDev < 0.01) return;
 
             foreach (var (scene, rate) in perSceneRates)
             {
                 double z = Math.Abs(rate - avg) / stdDev;
                 if (z > 2.0)
                 {
+                    string direction = rate > avg ? "more casual" : "more formal";
+                    string rateStr = rate > avg
+                        ? $"{rate:P0} vs their usual {avg:P0}"
+                        : $"{rate:P0} vs their usual {avg:P0}";
                     notes.Add(new NlpNote
                     {
                         Severity = NlpNoteSeverity.Warning,
-                        Category = NlpNoteCategory.Voice,
+                        Category = NlpNoteCategory.LineEditor,
                         SceneId = scene.SceneId,
                         SceneTitle = scene.SceneTitle,
                         ChapterTitle = scene.ChapterTitle,
-                        Message = $"{profile.CharacterName} uses contractions at {avg:P0} " +
-                                  $"across their scenes, but '{scene.SceneTitle}' has a " +
-                                  $"contraction rate of {rate:P0}. " +
-                                  "Voice may be inconsistent."
+                        Message = $"{profile.CharacterName} sounds {direction} in '{scene.SceneTitle}' — " +
+                                  $"contraction rate is {rateStr}. " +
+                                  "If this isn't a deliberate shift in their arc, the voice may have drifted. " +
+                                  "Reading the scene aloud against an earlier one can make the difference audible."
                     });
                 }
             }
@@ -151,20 +205,60 @@ namespace alphaWriter.Services.Nlp
                 double z = Math.Abs(ratio - avg) / stdDev;
                 if (z > 2.0)
                 {
+                    string direction = ratio > avg ? "more dialogue-heavy" : "more narration-heavy";
                     notes.Add(new NlpNote
                     {
                         Severity = NlpNoteSeverity.Info,
-                        Category = NlpNoteCategory.Voice,
+                        Category = NlpNoteCategory.LineEditor,
                         SceneId = scene.SceneId,
                         SceneTitle = scene.SceneTitle,
                         ChapterTitle = scene.ChapterTitle,
-                        Message = $"{profile.CharacterName}'s scenes average " +
-                                  $"{avg:P0} dialogue, but '{scene.SceneTitle}' " +
-                                  $"has {ratio:P0}. This may indicate a " +
-                                  "shift in the character's typical scene composition."
+                        Message = $"'{scene.SceneTitle}' is {direction} than {profile.CharacterName}'s typical scenes " +
+                                  $"({ratio:P0} dialogue vs their average {avg:P0}). " +
+                                  "This may be intentional — a quiet introspective scene or an unusually charged exchange — " +
+                                  "but if unexpected, it may signal a structural imbalance."
                     });
                 }
             }
+        }
+
+        private static void DetectReadabilityDrift(CharacterVoiceProfile profile,
+            List<SceneAnalysisResult> scenes, List<NlpNote> notes)
+        {
+            if (profile.SceneSnapshots.Count < 3) return;
+
+            var snapshots = profile.SceneSnapshots;
+            double avg = snapshots.Average(s => s.ReadabilityScore);
+            double stdDev = snapshots.Count > 1
+                ? Math.Sqrt(snapshots.Sum(s => Math.Pow(s.ReadabilityScore - avg, 2)) / (snapshots.Count - 1))
+                : 0;
+
+            if (stdDev < 3.0) return; // negligible variation
+
+            // Check for a significant trend in the second half vs. first half
+            int mid = snapshots.Count / 2;
+            double firstHalfAvg = snapshots.Take(mid).Average(s => s.ReadabilityScore);
+            double secondHalfAvg = snapshots.Skip(mid).Average(s => s.ReadabilityScore);
+            double shift = Math.Abs(secondHalfAvg - firstHalfAvg);
+
+            if (shift < 10) return;
+
+            string direction = secondHalfAvg < firstHalfAvg ? "denser" : "simpler";
+            // Find the scene that represents the shift boundary (first scene in second half)
+            var boundaryScene = scenes.Count >= mid ? scenes[mid] : scenes.Last();
+
+            notes.Add(new NlpNote
+            {
+                Severity = NlpNoteSeverity.Warning,
+                Category = NlpNoteCategory.LineEditor,
+                SceneId = boundaryScene.SceneId,
+                SceneTitle = boundaryScene.SceneTitle,
+                ChapterTitle = boundaryScene.ChapterTitle,
+                Message = $"{profile.CharacterName}'s prose grows {direction} in their later scenes — " +
+                          $"readability shifts from {firstHalfAvg:F0} in early appearances to {secondHalfAvg:F0} later. " +
+                          "A gradual change can signal natural character development; " +
+                          "an abrupt one may indicate unintentional voice drift."
+            });
         }
 
         // ── Narrator voice drift ─────────────────────────────────────────────
@@ -176,15 +270,13 @@ namespace alphaWriter.Services.Nlp
                 if (scene.ViewpointCharacterIds.Count == 0)
                     continue;
 
-                // Get non-dialogue sentences
                 var narrationSentences = scene.Sentences
                     .Where(s => !NlpTextExtractor.IsDialogue(s.Text))
                     .ToList();
 
-                if (narrationSentences.Count < 15) // Need enough for baseline + comparison
+                if (narrationSentences.Count < 15)
                     continue;
 
-                // Establish baseline from first 10 non-dialogue sentences
                 const int baselineSize = 10;
                 var baseline = narrationSentences.Take(baselineSize).ToList();
                 double baselineAvgLength = baseline.Average(s => s.WordCount);
@@ -193,15 +285,13 @@ namespace alphaWriter.Services.Nlp
                         / (baseline.Count - 1))
                     : 0;
 
-                if (baselineStdDev < 1.0) baselineStdDev = 1.0; // minimum to avoid div-by-zero
+                if (baselineStdDev < 1.0) baselineStdDev = 1.0;
 
-                // Check subsequent sentences for drift
                 for (int i = baselineSize; i < narrationSentences.Count; i++)
                 {
                     var sentence = narrationSentences[i];
                     double lengthZ = Math.Abs(sentence.WordCount - baselineAvgLength) / baselineStdDev;
 
-                    // Flag if both style AND embedding distance suggest drift
                     bool styleDrift = lengthZ > 3.0;
                     bool embeddingDrift = sentence.EmbeddingDistance > 0.4f;
 
@@ -210,49 +300,215 @@ namespace alphaWriter.Services.Nlp
                         notes.Add(new NlpNote
                         {
                             Severity = NlpNoteSeverity.Info,
-                            Category = NlpNoteCategory.Voice,
+                            Category = NlpNoteCategory.LineEditor,
                             SceneId = scene.SceneId,
                             SceneTitle = scene.SceneTitle,
                             ChapterTitle = scene.ChapterTitle,
                             SentenceIndex = sentence.Index,
-                            Message = $"Sentence {sentence.Index + 1} in '{scene.SceneTitle}' " +
-                                      "doesn't match the narrator's established voice — " +
-                                      "the sentence structure and topic shift significantly."
+                            Message = $"Sentence {sentence.Index + 1} in '{scene.SceneTitle}' breaks from the narrator's " +
+                                      "established voice — both the sentence structure and the subject matter shift " +
+                                      "significantly from the opening baseline. " +
+                                      "This may be an unintentional slip into a different register."
                         });
                     }
                 }
             }
         }
 
+        // ── Dialogue voice profiling ─────────────────────────────────────────
+
+        public List<DialogueVoiceProfile> BuildDialogueProfiles(List<SceneAnalysisResult> results, Book book,
+            IPosTaggingService? posService = null)
+        {
+            var profiles = new List<DialogueVoiceProfile>();
+            if (book.Characters.Count == 0 || results.Count == 0)
+                return profiles;
+
+            var nameLookup = DialogueSpeakerAttributor.BuildNameLookup(book.Characters);
+            if (nameLookup.Count == 0)
+                return profiles;
+
+            // Attribute dialogue across all scenes
+            var allAttributions = new List<DialogueAttribution>();
+            foreach (var scene in results)
+            {
+                allAttributions.AddRange(
+                    DialogueSpeakerAttributor.AttributeDialogue(scene.Sentences, scene.SceneId, nameLookup, book.Characters));
+            }
+
+            if (allAttributions.Count == 0)
+                return profiles;
+
+            // Build a lookup for SentenceAnalysis by (sceneId, sentenceIndex)
+            var sentenceLookup = new Dictionary<(string sceneId, int index), SentenceAnalysis>();
+            foreach (var scene in results)
+            {
+                foreach (var sentence in scene.Sentences)
+                    sentenceLookup.TryAdd((scene.SceneId, sentence.Index), sentence);
+            }
+
+            // Group attributions by character
+            var grouped = allAttributions.GroupBy(a => a.CharacterId);
+
+            foreach (var group in grouped)
+            {
+                var charAttributions = group.ToList();
+                var dialogueTexts = charAttributions.Select(a => a.DialogueText).ToList();
+
+                if (dialogueTexts.Count == 0)
+                    continue;
+
+                // Find matching SentenceAnalysis objects for emotion data
+                var matchingSentences = charAttributions
+                    .Select(a => sentenceLookup.GetValueOrDefault((a.SceneId, a.SentenceIndex)))
+                    .Where(s => s != null)
+                    .Cast<SentenceAnalysis>()
+                    .ToList();
+
+                var style = _styleAnalyzer.AnalyzeExtended(dialogueTexts, posService);
+                var emotionDist = ComputeEmotionDistribution(matchingSentences);
+                var distinctiveWords = ComputeDistinctiveWords(dialogueTexts, results);
+
+                double adverbDensity = _styleAnalyzer.ComputeAdverbDensity(dialogueTexts);
+                double passiveVoiceRate = posService != null && posService.IsLoaded && dialogueTexts.Count > 0
+                    ? (double)_styleAnalyzer.CountPassiveSentences(dialogueTexts, posService) / dialogueTexts.Count
+                    : 0;
+
+                int exclamationCount = dialogueTexts.Count(t => t.TrimEnd().EndsWith('!'));
+                double exclamationRate = dialogueTexts.Count > 0 ? (double)exclamationCount / dialogueTexts.Count : 0;
+
+                int sceneCount = charAttributions.Select(a => a.SceneId).Distinct().Count();
+
+                profiles.Add(new DialogueVoiceProfile
+                {
+                    CharacterId = group.Key,
+                    CharacterName = charAttributions[0].CharacterName,
+                    Style = style,
+                    EmotionDistribution = emotionDist,
+                    DistinctiveWords = distinctiveWords,
+                    DialogueLineCount = dialogueTexts.Count,
+                    TotalWords = style.TotalWords,
+                    SceneCount = sceneCount,
+                    AvgSentenceLength = style.AverageSentenceLength,
+                    VocabularyRichness = style.VocabularyRichness,
+                    ContractionRate = style.ContractionRate,
+                    ReadabilityScore = style.ReadabilityScore,
+                    AdverbDensity = adverbDensity,
+                    PassiveVoiceRate = passiveVoiceRate,
+                    ClauseComplexity = style.ClauseComplexity,
+                    ExclamationRate = exclamationRate
+                });
+            }
+
+            return profiles;
+        }
+
+        public List<NlpNote> DetectDialogueVoiceAnomalies(List<DialogueVoiceProfile> profiles)
+        {
+            var notes = new List<NlpNote>();
+            if (profiles.Count < 2)
+                return notes;
+
+            // Extract style vectors for normalization
+            var metricKeys = new Func<DialogueVoiceProfile, double>[]
+            {
+                p => p.AvgSentenceLength,
+                p => p.VocabularyRichness,
+                p => p.ContractionRate,
+                p => p.ReadabilityScore,
+                p => p.ClauseComplexity,
+                p => p.ExclamationRate
+            };
+
+            // Compute min/max for normalization
+            var mins = metricKeys.Select(fn => profiles.Min(fn)).ToArray();
+            var maxs = metricKeys.Select(fn => profiles.Max(fn)).ToArray();
+
+            // Normalize each profile to 0-1 vectors
+            var normalized = profiles.Select(p =>
+                metricKeys.Select((fn, i) =>
+                {
+                    double range = maxs[i] - mins[i];
+                    return range > 0 ? (fn(p) - mins[i]) / range : 0.5;
+                }).ToArray()
+            ).ToList();
+
+            // Compare each pair
+            for (int i = 0; i < profiles.Count; i++)
+            {
+                for (int j = i + 1; j < profiles.Count; j++)
+                {
+                    // Euclidean distance on normalized style vector
+                    double sumSq = 0;
+                    for (int k = 0; k < metricKeys.Length; k++)
+                    {
+                        double diff = normalized[i][k] - normalized[j][k];
+                        sumSq += diff * diff;
+                    }
+                    double distance = Math.Sqrt(sumSq / metricKeys.Length); // RMS distance, 0-1
+                    double styleSimilarity = 1.0 - distance;
+
+                    // Jaccard coefficient on top-10 distinctive words
+                    var wordsA = new HashSet<string>(
+                        profiles[i].DistinctiveWords.Take(10).Select(w => w.Word),
+                        StringComparer.OrdinalIgnoreCase);
+                    var wordsB = new HashSet<string>(
+                        profiles[j].DistinctiveWords.Take(10).Select(w => w.Word),
+                        StringComparer.OrdinalIgnoreCase);
+
+                    var intersection = wordsA.Intersect(wordsB, StringComparer.OrdinalIgnoreCase).ToList();
+                    var union = wordsA.Union(wordsB, StringComparer.OrdinalIgnoreCase);
+                    double jaccard = union.Any() ? (double)intersection.Count / union.Count() : 0;
+
+                    double combined = 0.7 * styleSimilarity + 0.3 * jaccard;
+
+                    if (combined > 0.85)
+                    {
+                        string sharedWords = intersection.Count > 0
+                            ? $" Shared vocabulary: {string.Join(", ", intersection)}."
+                            : "";
+
+                        notes.Add(new NlpNote
+                        {
+                            Severity = NlpNoteSeverity.Warning,
+                            Category = NlpNoteCategory.DevelopmentalEditor,
+                            Message = $"{profiles[i].CharacterName} and {profiles[j].CharacterName} sound very similar in dialogue " +
+                                      $"(similarity: {combined:P0}). " +
+                                      "Readers may struggle to distinguish their voices without speech tags. " +
+                                      "Consider differentiating through sentence length, vocabulary, " +
+                                      $"or formality level.{sharedWords}"
+                        });
+                    }
+                }
+            }
+
+            return notes;
+        }
+
         // ── Emotion distribution ─────────────────────────────────────────────
 
-        private static Dictionary<EmotionCluster, double> ComputeEmotionDistribution(
+        private static Dictionary<EmotionLabel, double> ComputeEmotionDistribution(
             List<SentenceAnalysis> sentences)
         {
-            var clusterSums = new Dictionary<EmotionCluster, double>();
-            foreach (EmotionCluster cluster in Enum.GetValues<EmotionCluster>())
-                clusterSums[cluster] = 0;
-
+            var labelSums = new Dictionary<EmotionLabel, double>();
             double total = 0;
 
             foreach (var sentence in sentences)
             {
                 foreach (var (label, confidence) in sentence.Emotions)
                 {
-                    var cluster = label.ToCluster();
-                    clusterSums[cluster] += confidence;
+                    labelSums[label] = labelSums.GetValueOrDefault(label) + confidence;
                     total += confidence;
                 }
             }
 
-            // Normalize to proportions
             if (total > 0)
             {
-                foreach (var cluster in clusterSums.Keys.ToList())
-                    clusterSums[cluster] /= total;
+                foreach (var label in labelSums.Keys.ToList())
+                    labelSums[label] /= total;
             }
 
-            return clusterSums;
+            return labelSums;
         }
 
         // ── TF-IDF distinctive words ─────────────────────────────────────────
@@ -260,7 +516,6 @@ namespace alphaWriter.Services.Nlp
         private static List<(string Word, double TfIdf)> ComputeDistinctiveWords(
             List<string> characterSentences, List<SceneAnalysisResult> allResults)
         {
-            // Build character word frequencies
             var charWordFreq = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             int charTotalWords = 0;
 
@@ -277,7 +532,6 @@ namespace alphaWriter.Services.Nlp
 
             if (charTotalWords == 0) return [];
 
-            // Build per-scene "document" word sets for IDF
             var sceneWordSets = allResults
                 .Select(r => new HashSet<string>(
                     r.Sentences.SelectMany(s => ExtractWords(s.Text))
@@ -288,16 +542,13 @@ namespace alphaWriter.Services.Nlp
             int numDocuments = sceneWordSets.Count;
             if (numDocuments == 0) return [];
 
-            // Compute TF-IDF
             var tfIdfScores = new List<(string Word, double TfIdf)>();
 
             foreach (var (word, count) in charWordFreq)
             {
                 double tf = (double)count / charTotalWords;
-
                 int docCount = sceneWordSets.Count(set => set.Contains(word));
                 double idf = Math.Log((double)(numDocuments + 1) / (docCount + 1)) + 1;
-
                 tfIdfScores.Add((word, tf * idf));
             }
 
@@ -307,14 +558,15 @@ namespace alphaWriter.Services.Nlp
                 .ToList();
         }
 
+        private static readonly Regex WordPattern = new(@"[\w][\w'\u2019]*[\w]|[\w]+", RegexOptions.Compiled);
+
         private static IEnumerable<string> ExtractWords(string text)
         {
-            return text.Split([' ', '\t', '\r', '\n', ',', '.', '!', '?', ';', ':', '"', '\'', '(', ')', '[', ']', '{', '}', '-', '\u2014', '\u2013'],
-                    StringSplitOptions.RemoveEmptyEntries)
+            return WordPattern.Matches(text)
+                .Select(m => m.Value)
                 .Where(w => w.Length > 1);
         }
 
-        // Common English stop words
         private static readonly HashSet<string> StopWords = new(StringComparer.OrdinalIgnoreCase)
         {
             "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
@@ -331,7 +583,10 @@ namespace alphaWriter.Services.Nlp
             "back", "even", "still", "just", "now", "well", "like", "said", "one",
             "two", "first", "new", "way", "any", "many", "much", "make", "made",
             "get", "got", "go", "went", "see", "saw", "come", "came", "take", "took",
-            "know", "knew", "think", "thought", "look", "looked", "say", "tell", "told"
+            "know", "knew", "think", "thought", "look", "looked", "say", "tell", "told",
+            // contraction fragments (safety net)
+            "isn", "don", "aren", "couldn", "wouldn", "shouldn", "wasn", "weren",
+            "hasn", "haven", "hadn", "won", "didn", "mustn", "needn", "shan"
         };
     }
 }

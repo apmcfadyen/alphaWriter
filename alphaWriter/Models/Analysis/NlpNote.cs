@@ -17,6 +17,12 @@ namespace alphaWriter.Models.Analysis
             _ => "#61AFEF"
         };
 
-        public string CategoryLabel => Category.ToString();
+        public string CategoryLabel => Category switch
+        {
+            NlpNoteCategory.CopyEditor => "Copy Editor",
+            NlpNoteCategory.LineEditor => "Line Editor",
+            NlpNoteCategory.DevelopmentalEditor => "Developmental Editor",
+            _ => Category.ToString()
+        };
     }
 }

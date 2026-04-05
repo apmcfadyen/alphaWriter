@@ -31,6 +31,9 @@ namespace alphaWriter
             builder.Services.AddSingleton<IEmotionService, EmotionService>();
             builder.Services.AddSingleton<ICharacterVoiceAnalyzer, CharacterVoiceAnalyzer>();
             builder.Services.AddSingleton<INlpCacheService, NlpCacheService>();
+            builder.Services.AddSingleton<IPosTaggingService, PosTaggingService>();
+            builder.Services.AddSingleton<INerService, NerService>();
+            builder.Services.AddSingleton<ILocationHeuristicService, LocationHeuristicService>();
             builder.Services.AddSingleton<INlpAnalysisService>(sp =>
                 new NlpAnalysisService(
                     sp.GetRequiredService<IStyleAnalyzer>(),
@@ -38,7 +41,8 @@ namespace alphaWriter
                     sp.GetRequiredService<IEmbeddingService>(),
                     sp.GetRequiredService<INlpModelManager>(),
                     sp.GetRequiredService<IEmotionService>(),
-                    sp.GetRequiredService<ICharacterVoiceAnalyzer>()));
+                    sp.GetRequiredService<ICharacterVoiceAnalyzer>(),
+                    sp.GetRequiredService<IPosTaggingService>()));
 
             // ViewModels
             builder.Services.AddSingleton<WriterViewModel>();

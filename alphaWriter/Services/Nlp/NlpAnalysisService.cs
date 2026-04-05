@@ -16,6 +16,7 @@ namespace alphaWriter.Services.Nlp
         private readonly INlpModelManager? _modelManager;
         private readonly IEmotionService? _emotionService;
         private readonly ICharacterVoiceAnalyzer? _voiceAnalyzer;
+        private readonly IPosTaggingService? _posTaggingService;
 
         // Phase 1 constructor (rule-based only)
         public NlpAnalysisService(IStyleAnalyzer styleAnalyzer, IPacingAnalyzer pacingAnalyzer)
@@ -45,6 +46,21 @@ namespace alphaWriter.Services.Nlp
             _modelManager = modelManager;
             _emotionService = emotionService;
             _voiceAnalyzer = voiceAnalyzer;
+        }
+
+        // Phase 6 constructor (+ POS tagging for passive voice detection)
+        public NlpAnalysisService(IStyleAnalyzer styleAnalyzer, IPacingAnalyzer pacingAnalyzer,
+            IEmbeddingService embeddingService, INlpModelManager modelManager,
+            IEmotionService emotionService, ICharacterVoiceAnalyzer voiceAnalyzer,
+            IPosTaggingService posTaggingService)
+        {
+            _styleAnalyzer = styleAnalyzer;
+            _pacingAnalyzer = pacingAnalyzer;
+            _embeddingService = embeddingService;
+            _modelManager = modelManager;
+            _emotionService = emotionService;
+            _voiceAnalyzer = voiceAnalyzer;
+            _posTaggingService = posTaggingService;
         }
 
         private bool EmbeddingsAvailable =>
@@ -93,7 +109,7 @@ namespace alphaWriter.Services.Nlp
             }, ct);
         }
 
-        public Task<(List<NlpNote> Notes, List<SceneAnalysisResult> Results)> AnalyzeBookAsync(Book book,
+        public Task<(List<NlpNote> Notes, List<SceneAnalysisResult> Results, List<CharacterVoiceProfile> VoiceProfiles, List<DialogueVoiceProfile> DialogueProfiles)> AnalyzeBookAsync(Book book,
             IProgress<string>? progress = null, CancellationToken ct = default)
         {
             return Task.Run(async () =>
@@ -112,8 +128,34 @@ namespace alphaWriter.Services.Nlp
                     await EnsureEmotionsLoaded(ct);
                 }
 
+                // Load POS tagger if available (downloads ~5–10 MB on first run)
+                if (_posTaggingService is not null)
+                {
+                    try
+                    {
+                        progress?.Report("Loading POS tagger...");
+                        await _posTaggingService.LoadAsync(ct);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        // Download failed, no internet, or initialization error.
+                        // Report the reason so it's visible in the UI, then continue
+                        // analysis without passive voice detection.
+                        var reason = ex.InnerException?.Message ?? ex.Message;
+                        progress?.Report(
+                            $"POS tagger unavailable — passive voice detection skipped. " +
+                            $"({ex.GetType().Name}: {reason.Split('\n')[0]})");
+                    }
+                }
+
                 var allNotes = new List<NlpNote>();
                 var allResults = new List<SceneAnalysisResult>();
+                var voiceProfiles = new List<CharacterVoiceProfile>();
+                var dialogueProfiles = new List<DialogueVoiceProfile>();
 
                 try
                 {
@@ -153,6 +195,38 @@ namespace alphaWriter.Services.Nlp
                             }
                         }
 
+                        // Phase 6: Prose quality — rule-based (always) + POS-based (when POS loaded)
+                        foreach (var result in chapterResults)
+                        {
+                            ct.ThrowIfCancellationRequested();
+                            var sentences = result.Sentences.Select(s => s.Text).ToList();
+
+                            result.Notes.AddRange(_styleAnalyzer.DetectAdverbDensity(
+                                sentences, result.SceneId, result.SceneTitle, result.ChapterTitle));
+
+                            result.Notes.AddRange(_styleAnalyzer.DetectShowDontTell(
+                                sentences, result.SceneId, result.SceneTitle, result.ChapterTitle));
+
+                            result.Notes.AddRange(_styleAnalyzer.DetectProximityEchoes(
+                                sentences, result.SceneId, result.SceneTitle, result.ChapterTitle));
+
+                            result.Notes.AddRange(_styleAnalyzer.DetectSubordinateClauseDensity(
+                                sentences, result.SceneId, result.SceneTitle, result.ChapterTitle));
+
+                            if (_posTaggingService is not null && _posTaggingService.IsLoaded)
+                            {
+                                ct.ThrowIfCancellationRequested();
+                                progress?.Report($"Detecting passive voice in '{result.SceneTitle}'...");
+                                result.Notes.AddRange(_styleAnalyzer.DetectPassiveVoice(
+                                    sentences, _posTaggingService,
+                                    result.SceneId, result.SceneTitle, result.ChapterTitle));
+
+                                result.Notes.AddRange(_styleAnalyzer.DetectSentenceOpenerMonotony(
+                                    sentences, _posTaggingService,
+                                    result.SceneId, result.SceneTitle, result.ChapterTitle));
+                            }
+                        }
+
                         allNotes.AddRange(chapterResults.SelectMany(r => r.Notes));
                         allResults.AddRange(chapterResults);
                     }
@@ -167,22 +241,29 @@ namespace alphaWriter.Services.Nlp
                     if (_voiceAnalyzer is not null && allResults.Count > 0)
                     {
                         progress?.Report("Analyzing character voices...");
-                        var profiles = _voiceAnalyzer.BuildProfiles(allResults, book);
+                        var posService = _posTaggingService?.IsLoaded == true ? _posTaggingService : null;
+                        voiceProfiles = _voiceAnalyzer.BuildProfiles(allResults, book, posService);
                         allNotes.AddRange(
-                            _voiceAnalyzer.DetectVoiceAnomalies(profiles, allResults, book));
+                            _voiceAnalyzer.DetectVoiceAnomalies(voiceProfiles, allResults, book));
+
+                        progress?.Report("Analyzing dialogue voices...");
+                        dialogueProfiles = _voiceAnalyzer.BuildDialogueProfiles(allResults, book, posService);
+                        allNotes.AddRange(
+                            _voiceAnalyzer.DetectDialogueVoiceAnomalies(dialogueProfiles));
                     }
 
                     progress?.Report("Analysis complete.");
                 }
                 finally
                 {
-                    // Phase 5: Unload models after analysis to free ~500MB of memory.
+                    // Phase 5/6: Unload all models after analysis to free memory.
                     // They will be lazily reloaded on the next analysis run.
                     _embeddingService?.UnloadModel();
                     _emotionService?.UnloadModel();
+                    _posTaggingService?.UnloadModel();
                 }
 
-                return (allNotes, allResults);
+                return (allNotes, allResults, voiceProfiles, dialogueProfiles);
             }, ct);
         }
 
@@ -269,14 +350,14 @@ namespace alphaWriter.Services.Nlp
                         result.Notes.Add(new NlpNote
                         {
                             Severity = NlpNoteSeverity.Info,
-                            Category = NlpNoteCategory.Pacing,
+                            Category = NlpNoteCategory.DevelopmentalEditor,
                             SceneId = scene.Id,
                             SceneTitle = scene.Title,
                             ChapterTitle = chapter.Title,
                             SentenceIndex = i,
-                            Message = $"Sentence {i + 1} in '{scene.Title}' is {wc} words — " +
-                                      $"the scene average is {styleProfile.AverageSentenceLength:F0}. " +
-                                      "Consider breaking it up for readability."
+                            Message = $"Sentence {i + 1} runs {wc} words while the scene averages {styleProfile.AverageSentenceLength:F0} — " +
+                                      "readers may lose the thread before the payoff arrives. " +
+                                      "Break at the natural clause boundary, letting each idea land separately."
                         });
                     }
                 }
@@ -337,13 +418,13 @@ namespace alphaWriter.Services.Nlp
                     results[i].Notes.Add(new NlpNote
                     {
                         Severity = NlpNoteSeverity.Warning,
-                        Category = NlpNoteCategory.Style,
+                        Category = NlpNoteCategory.DevelopmentalEditor,
                         SceneId = results[i].SceneId,
                         SceneTitle = results[i].SceneTitle,
                         ChapterTitle = chapter.Title,
-                        Message = $"'{results[i].SceneTitle}' has a semantic similarity of {similarity:P0} " +
-                                  $"to the rest of '{chapter.Title}' — it may feel stylistically out of place. " +
-                                  "Consider whether it belongs in this chapter."
+                        Message = $"'{results[i].SceneTitle}' is only {similarity:P0} semantically similar to the rest of '{chapter.Title}' — " +
+                                  "its subjects and language feel distinctly different from the surrounding scenes. " +
+                                  "This could be an intentional tonal break, but if unexpected, it may need better connective tissue."
                     });
                 }
             }
@@ -388,14 +469,14 @@ namespace alphaWriter.Services.Nlp
                         result.Notes.Add(new NlpNote
                         {
                             Severity = NlpNoteSeverity.Info,
-                            Category = NlpNoteCategory.Style,
+                            Category = NlpNoteCategory.DevelopmentalEditor,
                             SceneId = result.SceneId,
                             SceneTitle = result.SceneTitle,
                             ChapterTitle = chapterTitle,
                             SentenceIndex = sentenceIndex,
-                            Message = $"Topic drift detected around sentence {sentenceIndex + 1} in " +
-                                      $"'{result.SceneTitle}' (similarity: {similarity:P0}). " +
-                                      "The subject matter shifts significantly here."
+                            Message = $"The scene's focus shifts noticeably around sentence {sentenceIndex + 1} in '{result.SceneTitle}' " +
+                                      $"(window similarity: {similarity:P0}). This isn't necessarily a problem — " +
+                                      "but if the shift feels unearned, a brief transitional beat would help."
                         });
                     }
                 }
@@ -419,27 +500,35 @@ namespace alphaWriter.Services.Nlp
                 return notes;
 
             const int windowSize = 5;
-            EmotionCluster? prevDominant = null;
-            Dictionary<EmotionCluster, double>? prevWindowClusters = null;
+            HashSet<EmotionLabel>? prevTop3 = null;
+            EmotionLabel? prevDominantLabel = null;
 
-            // Use non-overlapping windows to detect abrupt shifts (same approach as topic drift)
+            // Use non-overlapping windows to detect abrupt shifts
             for (int start = 0; start <= sentencesWithEmotions.Count - windowSize; start += windowSize)
             {
                 var window = sentencesWithEmotions.Skip(start).Take(windowSize).ToList();
-                var windowClusters = ComputeWindowEmotionProfile(window);
+                var windowSums = ComputeWindowEmotionProfile(window);
 
-                var dominant = windowClusters
+                // Top-3 labels by confidence sum
+                var top3 = windowSums
+                    .OrderByDescending(kv => kv.Value)
+                    .Take(3)
+                    .Select(kv => kv.Key)
+                    .ToHashSet();
+
+                // Dominant = single highest-confidence label
+                var dominant = windowSums
                     .OrderByDescending(kv => kv.Value)
                     .First().Key;
 
-                if (prevDominant.HasValue && dominant != prevDominant.Value
-                    && prevWindowClusters is not null)
+                if (prevTop3 is not null && prevDominantLabel.HasValue && !prevTop3.Contains(dominant))
                 {
-                    // Compute overlap: how much of the new window's emotion mass
-                    // is in the old dominant cluster
-                    double totalMass = windowClusters.Values.Sum();
+                    // Overlap: fraction of new window's total mass on labels in previous top-3
+                    double totalMass = windowSums.Values.Sum();
                     double overlap = totalMass > 0
-                        ? windowClusters.GetValueOrDefault(prevDominant.Value) / totalMass
+                        ? windowSums
+                            .Where(kv => prevTop3.Contains(kv.Key))
+                            .Sum(kv => kv.Value) / totalMass
                         : 0;
 
                     if (overlap < 0.30)
@@ -451,52 +540,54 @@ namespace alphaWriter.Services.Nlp
 
                         string qualifier = overlap < 0.15 ? "Dramatic emotional" : "Tone";
 
+                        string toneMessage = overlap < 0.15
+                            ? $"The emotional register shifts sharply — from {prevDominantLabel.Value} to {dominant} — " +
+                              $"around sentence {sentenceIndex + 1} in '{result.SceneTitle}'. " +
+                              "The transition feels abrupt; a brief bridge moment could make the shift feel intentional."
+                            : $"The mood shifts from {prevDominantLabel.Value} to {dominant} around sentence {sentenceIndex + 1} " +
+                              $"in '{result.SceneTitle}'. This may be a deliberate turn — " +
+                              "read it against the previous scene to check whether the shift lands.";
+
                         notes.Add(new NlpNote
                         {
                             Severity = severity,
-                            Category = NlpNoteCategory.Emotion,
+                            Category = NlpNoteCategory.LineEditor,
                             SceneId = result.SceneId,
                             SceneTitle = result.SceneTitle,
                             ChapterTitle = result.ChapterTitle,
                             SentenceIndex = sentenceIndex,
-                            Message = $"{qualifier} shift from {prevDominant.Value} to {dominant} " +
-                                      $"around sentence {sentenceIndex + 1} in '{result.SceneTitle}'. " +
-                                      (overlap < 0.15
-                                          ? "The transition may feel abrupt."
-                                          : "Consider whether the transition feels earned.")
+                            Message = toneMessage
                         });
 
                         // Skip ahead to avoid duplicate notes for the same shift
                         start += windowSize - 1;
-                        prevDominant = null;
-                        prevWindowClusters = null;
+                        prevTop3 = null;
+                        prevDominantLabel = null;
                         continue;
                     }
                 }
 
-                prevDominant = dominant;
-                prevWindowClusters = windowClusters;
+                prevTop3 = top3;
+                prevDominantLabel = dominant;
             }
 
             return notes;
         }
 
-        private static Dictionary<EmotionCluster, double> ComputeWindowEmotionProfile(
+        private static Dictionary<EmotionLabel, double> ComputeWindowEmotionProfile(
             List<SentenceAnalysis> window)
         {
-            var clusters = new Dictionary<EmotionCluster, double>();
-            foreach (EmotionCluster c in Enum.GetValues<EmotionCluster>())
-                clusters[c] = 0;
+            var sums = new Dictionary<EmotionLabel, double>();
 
             foreach (var sentence in window)
             {
                 foreach (var (label, confidence) in sentence.Emotions)
                 {
-                    clusters[label.ToCluster()] += confidence;
+                    sums[label] = sums.GetValueOrDefault(label) + confidence;
                 }
             }
 
-            return clusters;
+            return sums;
         }
 
         // ── Chapter and book level notes ─────────────────────────────────────
@@ -542,12 +633,14 @@ namespace alphaWriter.Services.Nlp
                             allNotes.Add(new NlpNote
                             {
                                 Severity = NlpNoteSeverity.Info,
-                                Category = NlpNoteCategory.Structure,
+                                Category = NlpNoteCategory.DevelopmentalEditor,
                                 SceneId = string.Empty,
                                 SceneTitle = string.Empty,
                                 ChapterTitle = chapter.Title,
-                                Message = $"'{chapter.Title}' has {count} scenes — {direction} than " +
-                                          $"the book average of {avg:F0}. This may indicate a structural imbalance."
+                                Message = $"'{chapter.Title}' has {count} scenes against a book average of {avg:F0} — " +
+                                          $"{direction} than most chapters. " +
+                                          "A disparity this large can affect how readers experience the chapter's pacing " +
+                                          "relative to the rest of the book."
                             });
                         }
                     }
@@ -584,11 +677,11 @@ namespace alphaWriter.Services.Nlp
                             notes.Add(new NlpNote
                             {
                                 Severity = NlpNoteSeverity.Warning,
-                                Category = NlpNoteCategory.Structure,
+                                Category = NlpNoteCategory.DevelopmentalEditor,
                                 ChapterTitle = chTitle,
-                                Message = $"'{chTitle}' is {wc:N0} words — {direction} than " +
-                                          $"the book average of {avg:N0} words per chapter. " +
-                                          "Consider whether this chapter needs rebalancing."
+                                Message = $"'{chTitle}' is {wc:N0} words — {direction} than the book average of {avg:N0}. " +
+                                          "A chapter this far outside the norm disrupts the implicit pacing contract with readers. " +
+                                          "Consider trimming, or splitting it into two shorter chapters."
                             });
                         }
                     }
@@ -614,17 +707,17 @@ namespace alphaWriter.Services.Nlp
                         double z = (r.Style.DialogueRatio - avgDialogue) / stdDev;
                         if (Math.Abs(z) > 2.0)
                         {
-                            string direction = z > 0 ? "much more dialogue" : "much less dialogue";
+                            string dlgDirection = z > 0 ? "unusually dialogue-heavy" : "unusually narration-heavy";
                             notes.Add(new NlpNote
                             {
                                 Severity = NlpNoteSeverity.Info,
-                                Category = NlpNoteCategory.Style,
+                                Category = NlpNoteCategory.DevelopmentalEditor,
                                 SceneId = r.SceneId,
                                 SceneTitle = r.SceneTitle,
                                 ChapterTitle = r.ChapterTitle,
-                                Message = $"'{r.SceneTitle}' has {direction} ({r.Style.DialogueRatio:P0}) " +
-                                          $"than the book average ({avgDialogue:P0}). " +
-                                          "This can affect pacing — consider whether the balance feels intentional."
+                                Message = $"'{r.SceneTitle}' is {dlgDirection} — {r.Style.DialogueRatio:P0} dialogue " +
+                                          $"vs the book average of {avgDialogue:P0}. " +
+                                          "This imbalance can feel jarring if it isn't marking a structural pivot."
                             });
                         }
                     }
@@ -650,18 +743,18 @@ namespace alphaWriter.Services.Nlp
                         double z = (r.Style.ContractionRate - avgContraction) / stdDev;
                         if (Math.Abs(z) > 2.0)
                         {
-                            // Higher contraction rate = more casual, lower = more formal
-                            string direction = z > 0 ? "more casual" : "more formal";
+                            string ctrDirection = z > 0 ? "more casual" : "more formal";
                             notes.Add(new NlpNote
                             {
                                 Severity = NlpNoteSeverity.Info,
-                                Category = NlpNoteCategory.Voice,
+                                Category = NlpNoteCategory.LineEditor,
                                 SceneId = r.SceneId,
                                 SceneTitle = r.SceneTitle,
                                 ChapterTitle = r.ChapterTitle,
-                                Message = $"'{r.SceneTitle}' feels {direction} (contraction rate {r.Style.ContractionRate:P0}) " +
-                                          $"than the book average ({avgContraction:P0}). " +
-                                          "This may create a tonal inconsistency."
+                                Message = $"'{r.SceneTitle}' sounds {ctrDirection} — contraction rate {r.Style.ContractionRate:P0} " +
+                                          $"vs the book average of {avgContraction:P0}. " +
+                                          "The register shift may be deliberate (a formal ceremony, a tense confrontation) — " +
+                                          "if not, it can quietly erode the book's tonal consistency."
                             });
                         }
                     }
@@ -681,14 +774,14 @@ namespace alphaWriter.Services.Nlp
                     notes.Add(new NlpNote
                     {
                         Severity = NlpNoteSeverity.Info,
-                        Category = NlpNoteCategory.Pacing,
+                        Category = NlpNoteCategory.DevelopmentalEditor,
                         SceneId = r.SceneId,
                         SceneTitle = r.SceneTitle,
                         ChapterTitle = r.ChapterTitle,
                         SentenceIndex = 0,
-                        Message = $"'{r.SceneTitle}' opens with a {first.WordCount}-word sentence " +
-                                  $"(scene average: {r.Style.AverageSentenceLength:F0}). " +
-                                  "A long opening sentence can slow a reader's entry into the scene."
+                        Message = $"'{r.SceneTitle}' opens with a {first.WordCount}-word sentence against a scene average of {r.Style.AverageSentenceLength:F0} — " +
+                                  "readers are still orienting themselves and may stumble on a complex opener. " +
+                                  "A shorter hook pulls them in faster."
                     });
                 }
 
@@ -697,15 +790,194 @@ namespace alphaWriter.Services.Nlp
                     notes.Add(new NlpNote
                     {
                         Severity = NlpNoteSeverity.Info,
-                        Category = NlpNoteCategory.Pacing,
+                        Category = NlpNoteCategory.DevelopmentalEditor,
                         SceneId = r.SceneId,
                         SceneTitle = r.SceneTitle,
                         ChapterTitle = r.ChapterTitle,
                         SentenceIndex = r.Sentences.Count - 1,
-                        Message = $"'{r.SceneTitle}' closes with a {last.WordCount}-word sentence. " +
-                                  "Shorter closing sentences often create stronger scene endings."
+                        Message = $"'{r.SceneTitle}' closes with a {last.WordCount}-word sentence — the final beat carries extra weight, " +
+                                  "and a long ending can dissipate it. A tighter closing sentence tends to land harder."
                     });
                 }
+            }
+
+            // ── Formality trajectory ────────────────────────────────────────
+            // Compare average contraction rate in the first vs second half of the book
+            var chapterOrder = allResults
+                .GroupBy(r => r.ChapterTitle)
+                .Select(g => new { Chapter = g.Key, AvgContraction = g.Average(r => r.Style.ContractionRate) })
+                .ToList();
+
+            if (chapterOrder.Count >= 4)
+            {
+                int mid = chapterOrder.Count / 2;
+                double firstHalfContraction = chapterOrder.Take(mid).Average(c => c.AvgContraction);
+                double secondHalfContraction = chapterOrder.Skip(mid).Average(c => c.AvgContraction);
+                double shift = secondHalfContraction - firstHalfContraction;
+
+                if (Math.Abs(shift) > 0.06)
+                {
+                    string direction = shift < 0 ? "more formal" : "more casual";
+                    notes.Add(new NlpNote
+                    {
+                        Severity = NlpNoteSeverity.Warning,
+                        Category = NlpNoteCategory.LineEditor,
+                        Message = $"The book's prose grows {direction} across the second half — " +
+                                  $"contraction rate shifts from {firstHalfContraction:P0} in early chapters " +
+                                  $"to {secondHalfContraction:P0} later. " +
+                                  "A gradual register shift can signal natural character development; " +
+                                  "an abrupt one may indicate unintentional voice drift."
+                    });
+                }
+            }
+
+            // ── Vocabulary plateau ──────────────────────────────────────────
+            // Check whether new vocabulary stops appearing in the second half
+            if (allResults.Count >= 6)
+            {
+                int mid = allResults.Count / 2;
+                var firstHalfWords = allResults.Take(mid)
+                    .SelectMany(r => r.Sentences.Select(s => s.Text))
+                    .SelectMany(s => s.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries))
+                    .Select(w => w.ToLowerInvariant().Trim('.', ',', '!', '?'))
+                    .Where(w => w.Length > 3)
+                    .ToHashSet();
+
+                var secondHalfWords = allResults.Skip(mid)
+                    .SelectMany(r => r.Sentences.Select(s => s.Text))
+                    .SelectMany(s => s.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries))
+                    .Select(w => w.ToLowerInvariant().Trim('.', ',', '!', '?'))
+                    .Where(w => w.Length > 3)
+                    .ToList();
+
+                if (secondHalfWords.Count > 0)
+                {
+                    int newWords = secondHalfWords.Distinct().Count(w => !firstHalfWords.Contains(w));
+                    double noveltyRate = (double)newWords / secondHalfWords.Distinct().Count();
+
+                    if (noveltyRate < 0.10)
+                    {
+                        notes.Add(new NlpNote
+                        {
+                            Severity = NlpNoteSeverity.Info,
+                            Category = NlpNoteCategory.DevelopmentalEditor,
+                            Message = $"The second half of the book introduces very little new vocabulary ({noveltyRate:P0} of words are new) — " +
+                                      "the prose may start to feel repetitive as readers move through the back half. " +
+                                      "Varying sentence structures and word choices can maintain freshness."
+                        });
+                    }
+                }
+            }
+
+            // ── Act-level pacing imbalance ──────────────────────────────────
+            // Compare average scene word count across three acts (chapter thirds)
+            var chapters = allResults.GroupBy(r => r.ChapterTitle).ToList();
+            if (chapters.Count >= 6)
+            {
+                int actSize = chapters.Count / 3;
+                double act1Avg = chapters.Take(actSize)
+                    .SelectMany(g => g).Average(r => r.Style.TotalWords);
+                double act2Avg = chapters.Skip(actSize).Take(actSize)
+                    .SelectMany(g => g).Average(r => r.Style.TotalWords);
+
+                if (act2Avg > act1Avg * 1.5 && act1Avg > 0)
+                {
+                    notes.Add(new NlpNote
+                    {
+                        Severity = NlpNoteSeverity.Warning,
+                        Category = NlpNoteCategory.DevelopmentalEditor,
+                        Message = $"Your middle act scenes average {act2Avg:N0} words vs {act1Avg:N0} in Act 1 — " +
+                                  "the pacing slows significantly in the second third of the book. " +
+                                  "Consider tightening middle act scenes or subdividing longer ones."
+                    });
+                }
+            }
+
+            // ── Emotional flatline ──────────────────────────────────────────
+            // Flag chapters where emotion data shows <3 distinct dominant emotions
+            var chapterEmotions = allResults
+                .Where(r => r.Sentences.Any(s => s.Emotions.Count > 0))
+                .GroupBy(r => r.ChapterTitle);
+
+            foreach (var chapterGroup in chapterEmotions)
+            {
+                var dominantEmotions = chapterGroup
+                    .Select(r => r.Sentences
+                        .Where(s => s.Emotions.Count > 0)
+                        .SelectMany(s => s.Emotions)
+                        .GroupBy(e => e.Label)
+                        .OrderByDescending(g => g.Sum(e => e.Confidence))
+                        .FirstOrDefault()?.Key)
+                    .Where(e => e.HasValue)
+                    .Select(e => e!.Value)
+                    .Distinct()
+                    .ToList();
+
+                if (dominantEmotions.Count > 0 && dominantEmotions.Count < 3)
+                {
+                    string emotions = string.Join(", ", dominantEmotions);
+                    notes.Add(new NlpNote
+                    {
+                        Severity = NlpNoteSeverity.Info,
+                        Category = NlpNoteCategory.DevelopmentalEditor,
+                        ChapterTitle = chapterGroup.Key,
+                        Message = $"'{chapterGroup.Key}' runs almost entirely in {emotions} — " +
+                                  "fewer than 3 distinct emotional tones across all scenes. " +
+                                  "Even a single moment of contrasting intensity would give readers an emotional beat to anchor to."
+                    });
+                }
+            }
+
+            // ── Dialogue desert ─────────────────────────────────────────────
+            // Flag runs of 4+ consecutive scenes with < 5% dialogue
+            int desertStart = -1;
+            int desertCount = 0;
+            for (int i = 0; i < allResults.Count; i++)
+            {
+                bool isDesert = allResults[i].Style.DialogueRatio < 0.05
+                    && allResults[i].Style.TotalSentences >= 5;
+                if (isDesert)
+                {
+                    if (desertStart < 0) desertStart = i;
+                    desertCount++;
+                }
+                else
+                {
+                    if (desertCount >= 4)
+                    {
+                        var first = allResults[desertStart];
+                        var last = allResults[i - 1];
+                        notes.Add(new NlpNote
+                        {
+                            Severity = NlpNoteSeverity.Warning,
+                            Category = NlpNoteCategory.DevelopmentalEditor,
+                            SceneId = first.SceneId,
+                            SceneTitle = first.SceneTitle,
+                            ChapterTitle = first.ChapterTitle,
+                            Message = $"'{first.SceneTitle}' through '{last.SceneTitle}' — {desertCount} consecutive scenes " +
+                                      "contain almost no dialogue. Pure narration at this length can feel airless; " +
+                                      "even a brief exchange grounds readers and resets the rhythm."
+                        });
+                    }
+                    desertStart = -1;
+                    desertCount = 0;
+                }
+            }
+            // Catch a run that extends to the end
+            if (desertCount >= 4)
+            {
+                var first = allResults[desertStart];
+                notes.Add(new NlpNote
+                {
+                    Severity = NlpNoteSeverity.Warning,
+                    Category = NlpNoteCategory.DevelopmentalEditor,
+                    SceneId = first.SceneId,
+                    SceneTitle = first.SceneTitle,
+                    ChapterTitle = first.ChapterTitle,
+                    Message = $"The book ends with {desertCount} consecutive scenes containing almost no dialogue — " +
+                              "pure narration this sustained can feel remote. " +
+                              "Even a brief exchange grounds readers before the final beat."
+                });
             }
 
             return notes;

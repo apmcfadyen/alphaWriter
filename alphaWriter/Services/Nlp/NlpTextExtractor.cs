@@ -144,7 +144,7 @@ namespace alphaWriter.Services.Nlp
         /// </summary>
         public static bool HasContraction(string sentence)
         {
-            return Regex.IsMatch(sentence, @"\b\w+'\w+\b");
+            return Regex.IsMatch(sentence, @"\b\w+['\u2019]\w+\b");
         }
     }
 }

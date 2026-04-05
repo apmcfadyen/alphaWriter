@@ -7,7 +7,10 @@ namespace alphaWriter.Views
     {
         private WriterViewModel _viewModel;
         private bool _editorReady;
+        private bool _heatMapActive;
         private Scene? _currentEditorScene; // The scene currently loaded in the WebView
+        private int? _pendingScrollSentenceIndex; // Set before a cross-scene note navigation; consumed by LoadSceneAsync
+        private CancellationTokenSource? _sceneChangeCts; // Cancels a mid-flight scene change when a newer one supersedes it
 
         public WriterPage(WriterViewModel viewModel)
         {
@@ -118,6 +121,13 @@ namespace alphaWriter.Views
             System.Diagnostics.Debug.WriteLine($"[EDITOR] OnSelectedSceneChanged: scene={scene?.Title ?? "NULL"}, _editorReady={_editorReady}, _currentEditorScene={_currentEditorScene?.Title ?? "NULL"}");
             if (!_editorReady) return;
 
+            // Cancel any in-flight scene change and create a new token for this one.
+            // This prevents a rapid null→scene transition (caused by SelectedChapter change
+            // nulling SelectedScene before the real scene is set) from racing: the null
+            // handler's setContent('') must not fire after the real scene has already loaded.
+            _sceneChangeCts?.Cancel();
+            var cts = _sceneChangeCts = new CancellationTokenSource();
+
             // Flush the outgoing scene's content before loading the new one.
             // Clear _currentEditorScene first so stale navigations are ignored.
             var outgoing = _currentEditorScene;
@@ -130,6 +140,11 @@ namespace alphaWriter.Views
                 System.Diagnostics.Debug.WriteLine($"[EDITOR] After flush, outgoing '{outgoing.Title}' Content length={outgoing.Content?.Length ?? -1}");
             }
 
+            // If a newer scene-change handler has already started, bail out.
+            // The newer handler is responsible for loading its scene; clearing the editor
+            // here would race with—and clobber—whatever it has already loaded.
+            if (cts.IsCancellationRequested) return;
+
             if (scene is null)
             {
                 await MainThread.InvokeOnMainThreadAsync(async () =>
@@ -139,8 +154,11 @@ namespace alphaWriter.Views
 
             System.Diagnostics.Debug.WriteLine($"[EDITOR] Loading scene '{scene.Title}', Content length={scene.Content?.Length ?? -1}, Content preview='{scene.Content?.Substring(0, Math.Min(scene.Content?.Length ?? 0, 80))}'");
             await LoadSceneAsync(scene);
-            _currentEditorScene = scene;
-            System.Diagnostics.Debug.WriteLine($"[EDITOR] Scene '{scene.Title}' loaded, _currentEditorScene set");
+            if (!cts.IsCancellationRequested)
+            {
+                _currentEditorScene = scene;
+                System.Diagnostics.Debug.WriteLine($"[EDITOR] Scene '{scene.Title}' loaded, _currentEditorScene set");
+            }
         }
 
         private async Task FlushEditorContentAsync(Scene scene)
@@ -206,6 +224,19 @@ namespace alphaWriter.Views
                 await EditorWebView.EvaluateJavaScriptAsync("refreshHighlighting()");
             }
             catch { /* non-critical */ }
+
+            // 4. Reapply heat map overlays if they were active before the scene switch.
+            await ReapplyHeatMapIfActiveAsync();
+
+            // 5. If a note-navigation jump is pending (set by NavigateToNoteAsync before
+            //    the scene switch), scroll to and flash-highlight the target sentence.
+            if (_pendingScrollSentenceIndex.HasValue)
+            {
+                var idx = _pendingScrollSentenceIndex.Value;
+                _pendingScrollSentenceIndex = null;
+                try { await EditorWebView.EvaluateJavaScriptAsync($"scrollToSentence({idx})"); }
+                catch { /* non-critical */ }
+            }
         }
 
         /// <summary>
@@ -229,6 +260,7 @@ namespace alphaWriter.Views
         // EvaluateJavaScriptAsync push required.
 
         private string? _cachedVisNetworkJs;
+        private string? _cachedChartJs;
 
         private async Task LoadReportAsync()
         {
@@ -236,10 +268,25 @@ namespace alphaWriter.Views
             {
                 if (_viewModel.ActiveReportType == "NLP")
                 {
+                    // Cache Chart.js on first use (~200 KB)
+                    if (_cachedChartJs is null)
+                    {
+                        try
+                        {
+                            using var stream = await FileSystem.OpenAppPackageFileAsync("chartjs.min.js");
+                            using var reader = new StreamReader(stream);
+                            _cachedChartJs = await reader.ReadToEndAsync();
+                        }
+                        catch
+                        {
+                            _cachedChartJs = string.Empty; // fallback: charts won't render but page still loads
+                        }
+                    }
+
                     var dataJson = _viewModel.BuildNlpReportJson();
                     System.Diagnostics.Debug.WriteLine(
                         $"[REPORT] LoadReportAsync NLP: dataJson length={dataJson.Length}");
-                    var html = BuildNlpReportHtml(dataJson);
+                    var html = BuildNlpReportHtml(_cachedChartJs ?? string.Empty, dataJson);
                     await MainThread.InvokeOnMainThreadAsync(() =>
                         ReportWebView.Source = new HtmlWebViewSource { Html = html });
                 }
@@ -447,7 +494,7 @@ function applyFilters(){
         /// Includes: pacing heatmap, style consistency chart, emotion distribution,
         /// and a categorized notes list.
         /// </summary>
-        private static string BuildNlpReportHtml(string dataJson)
+        private static string BuildNlpReportHtml(string chartJs, string dataJson)
         {
             const string css = @"
 * { margin:0; padding:0; box-sizing:border-box; }
@@ -476,12 +523,6 @@ h2:first-child { margin-top:0; }
 .emotion-legend { display:flex; gap:12px; flex-wrap:wrap; margin-top:8px; }
 .legend-item { display:flex; align-items:center; gap:4px; font-size:11px; color:#9E9AA0; }
 .legend-dot { width:8px; height:8px; border-radius:50%; }
-.note-card { background:#22222A; border:1px solid #3A3A48; border-radius:6px;
-    padding:10px 12px; margin-bottom:6px; }
-.note-header { display:flex; align-items:center; gap:6px; margin-bottom:4px; }
-.note-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
-.note-cat { font-size:11px; color:#9E9AA0; }
-.note-msg { font-size:12px; color:#E8E4DC; line-height:1.5; }
 .empty-state { color:#5A5A6A; font-style:italic; text-align:center; padding:30px; }
 .tooltip { position:absolute; background:#2A2A35; border:1px solid #4A4A5C;
     color:#E8E4DC; font-size:11px; border-radius:4px; padding:4px 8px;
@@ -491,6 +532,49 @@ h2:first-child { margin-top:0; }
 .stat-card { background:#22222A; border:1px solid #3A3A48; border-radius:6px; padding:10px 12px; }
 .stat-value { font-size:20px; font-weight:700; color:#A89EC9; }
 .stat-label { font-size:11px; color:#9E9AA0; margin-top:2px; }
+
+/* ── Triage panel ─────────────────────────────────────────────────────── */
+.triage-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:16px; }
+@media (max-width:600px) { .triage-grid { grid-template-columns:1fr; } }
+.triage-col { background:#22222A; border:1px solid #3A3A48; border-radius:6px; padding:12px; }
+.triage-heading { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+.triage-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+.triage-title { font-size:13px; font-weight:600; }
+.triage-count { margin-left:auto; font-size:11px; color:#9E9AA0; }
+.triage-item { border-left:2px solid transparent; padding:6px 8px;
+    margin-bottom:5px; border-radius:0 4px 4px 0; background:#1A1A22;
+    cursor:pointer; }
+.triage-item:hover { background:#252530; }
+.triage-cat { font-size:10px; color:#9E9AA0; margin-bottom:2px; }
+.triage-msg { font-size:11px; color:#C8C4BC; line-height:1.45; }
+.triage-crumb { font-size:10px; color:#5A5A6A; margin-top:3px; }
+
+/* ── Character fingerprint ────────────────────────────────────────────── */
+.char-panel { display:flex; gap:20px; flex-wrap:wrap; align-items:flex-start; }
+.radar-wrapper { position:relative; flex-shrink:0; }
+.char-toggles { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+.char-toggle-btn { font-size:11px; padding:3px 10px; border-radius:12px;
+    border:2px solid transparent; cursor:pointer; background:transparent;
+    color:#E8E4DC; transition:opacity .15s; }
+.char-toggle-btn.off { opacity:.35; }
+.word-cloud { display:flex; flex-wrap:wrap; gap:5px; margin-top:12px; max-width:340px; }
+.word-chip { display:inline-block; border-radius:10px; padding:2px 9px;
+    font-size:11px; color:#1E1E28; font-weight:600; }
+
+/* ── Consistency timeline ─────────────────────────────────────────────── */
+.timeline-wrapper { overflow-x:auto; }
+.timeline-canvas-area { min-width:400px; }
+
+/* ── Note cards (All Notes section) ──────────────────────────────────── */
+.note-card { background:#22222A; border:1px solid #3A3A48; border-radius:6px;
+    padding:10px 12px; margin-bottom:8px; cursor:pointer;
+    transition:background .12s, border-color .12s; }
+.note-card:hover { background:#2A2A35; border-color:#5A5A6A; }
+.note-card-header { display:flex; align-items:center; gap:6px; margin-bottom:4px; }
+.note-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.note-meta { font-size:11px; color:#9E9AA0; flex:1; }
+.note-crumb { font-size:10px; color:#5A5A6A; margin-top:3px; }
+.note-nav-hint { font-size:10px; color:#4A4A5E; margin-top:4px; font-style:italic; }
 ";
 
             const string appJs = @"
@@ -500,17 +584,25 @@ var EMOTION_COLORS = {
     fear:'#D19A66', surprise:'#E5C07B', disgust:'#98C379', neutral:'#7A7A8A'
 };
 var SEVERITY_COLORS = { info:'#61AFEF', warning:'#E5C07B', issue:'#E06C75' };
+var RADAR_AXES = ['Sentence\nLength','Vocab\nRichness','Formality','Dialogue','Adverb\nDensity','Passive\nVoice','Clause\nDepth','Complexity'];
+var _radarChart = null;
+var _timelineChart = null;
+var _charVisible = {};
 
 function init(data) {
     if (typeof data === 'string') { try { data = JSON.parse(data); } catch(e) { data = {}; } }
     _data = data;
     renderOverview();
+    renderTriage();
     renderPacingHeatmap();
     renderStyleChart();
     renderEmotions();
+    renderCharFingerprint();
+    renderDialogueFingerprint();
     renderNotes();
 }
 
+/* ── Overview ──────────────────────────────────────────────────────────── */
 function renderOverview() {
     var el = document.getElementById('overview');
     if (!_data.scenes || _data.scenes.length === 0) {
@@ -530,6 +622,49 @@ function renderOverview() {
         '<div class=""stat-card""><div class=""stat-value"">'+noteCount+'</div><div class=""stat-label"">Notes Generated</div></div>';
 }
 
+/* ── Triage panel ──────────────────────────────────────────────────────── */
+function renderTriage() {
+    var el = document.getElementById('triage');
+    if (!_data.notes || _data.notes.length === 0) {
+        el.innerHTML = '<div class=""empty-state"">No notes to triage.</div>';
+        return;
+    }
+    var critical = _data.notes.filter(function(n){return n.severity==='issue';});
+    var polish   = _data.notes.filter(function(n){return n.severity==='warning';});
+    var consider = _data.notes.filter(function(n){return n.severity==='info';});
+
+    function makeCol(title, color, notes) {
+        var html = '<div class=""triage-col""><div class=""triage-heading"">' +
+            '<div class=""triage-dot"" style=""background:'+color+'""></div>' +
+            '<span class=""triage-title"" style=""color:'+color+'"">'+title+'</span>' +
+            '<span class=""triage-count"">'+notes.length+'</span></div>';
+        if (notes.length === 0) {
+            html += '<div class=""empty-state"" style=""padding:12px 0"">None</div>';
+        } else {
+            notes.forEach(function(n) {
+                var crumb = [n.chapter, n.scene].filter(Boolean).join(' \u203a ');
+                var navAttr = n.sceneId
+                    ? ' onclick=""navigateToNote(\'' + escAttr(n.sceneId) + '\',' + (n.sentenceIndex >= 0 ? n.sentenceIndex : -1) + ')"" title=""Jump to this sentence in the editor""'
+                    : '';
+                html += '<div class=""triage-item"" style=""border-left-color:'+color+'"" ' + navAttr + '>'+
+                    '<div class=""triage-cat"">'+escHtml(n.category)+'</div>'+
+                    '<div class=""triage-msg"">'+escHtml(n.message)+'</div>'+
+                    (crumb ? '<div class=""triage-crumb"">'+escHtml(crumb)+'</div>' : '')+
+                    '</div>';
+            });
+        }
+        html += '</div>';
+        return html;
+    }
+
+    el.innerHTML = '<div class=""triage-grid"">' +
+        makeCol('Critical', '#E06C75', critical) +
+        makeCol('Polish',   '#E5C07B', polish) +
+        makeCol('Consider', '#61AFEF', consider) +
+        '</div>';
+}
+
+/* ── Pacing heatmap ────────────────────────────────────────────────────── */
 function renderPacingHeatmap() {
     var el = document.getElementById('pacing');
     if (!_data.scenes || _data.scenes.length === 0) return;
@@ -538,23 +673,22 @@ function renderPacingHeatmap() {
     _data.scenes.forEach(function(sc) {
         var ratio = maxWc > 0 ? sc.wordCount / maxWc : 0;
         var h = Math.max(8, Math.round(ratio * 80));
-        // Color: short=cool(blue) to long=warm(purple)
         var r = Math.round(100 + ratio * 68);
         var g = Math.round(160 - ratio * 60);
         var b = Math.round(200 + ratio * 1);
         var bg = 'rgb('+r+','+g+','+b+')';
         html += '<div class=""hm-cell"" style=""height:'+h+'px;background:'+bg+'"" '+
-            'title=""'+sc.title+' ('+sc.chapter+')\n'+sc.wordCount+' words"">' +
-            '</div>';
+            'title=""'+escHtml(sc.title)+' ('+escHtml(sc.chapter)+')\n'+sc.wordCount+' words""></div>';
     });
     html += '</div><div style=""display:flex;gap:2px;margin-top:4px;"">';
     _data.scenes.forEach(function(sc) {
-        html += '<div class=""hm-label"" style=""flex:1;min-width:28px;"">'+sc.title.substring(0,8)+'</div>';
+        html += '<div class=""hm-label"" style=""flex:1;min-width:28px;"">'+escHtml(sc.title.substring(0,8))+'</div>';
     });
     html += '</div>';
     el.innerHTML = html;
 }
 
+/* ── Style bar chart ───────────────────────────────────────────────────── */
 function renderStyleChart() {
     var el = document.getElementById('style');
     if (!_data.scenes || _data.scenes.length === 0) return;
@@ -566,13 +700,14 @@ function renderStyleChart() {
         var dr = Math.round(sc.dialogueRatio * 100);
         html += '<div class=""bar-col"">' +
             '<div class=""bar"" style=""height:'+pct+'%;background:#A89EC9;"" ' +
-            'title=""'+sc.title+'\nAvg sentence: '+sc.avgSentenceLength+' words\nDialogue: '+dr+'%\nContractions: '+Math.round(sc.contractionRate*100)+'%""></div>' +
-            '<div class=""bar-label"">'+sc.title.substring(0,6)+'</div></div>';
+            'title=""'+escHtml(sc.title)+'\nAvg sentence: '+sc.avgSentenceLength+' words\nDialogue: '+dr+'%\nContractions: '+Math.round(sc.contractionRate*100)+'%""></div>' +
+            '<div class=""bar-label"">'+escHtml(sc.title.substring(0,6))+'</div></div>';
     });
     html += '</div>';
     el.innerHTML = html;
 }
 
+/* ── Emotion distribution ──────────────────────────────────────────────── */
 function renderEmotions() {
     var el = document.getElementById('emotions');
     if (!_data.scenes) return;
@@ -583,9 +718,9 @@ function renderEmotions() {
     }
     var html = '';
     _data.scenes.forEach(function(sc) {
-        if (!sc.emotions) { return; }
+        if (!sc.emotions) return;
         html += '<div style=""display:flex;align-items:center;gap:8px;margin-bottom:4px;"">';
-        html += '<div style=""width:80px;font-size:11px;color:#9E9AA0;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"" title=""'+sc.title+' ('+sc.chapter+')"">'+sc.title+'</div>';
+        html += '<div style=""width:80px;font-size:11px;color:#9E9AA0;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"" title=""'+escHtml(sc.title)+' ('+escHtml(sc.chapter)+')"">'+escHtml(sc.title)+'</div>';
         html += '<div class=""emotion-row"" style=""flex:1;"">';
         for (var key in sc.emotions) {
             var pct = Math.round(sc.emotions[key] * 100);
@@ -604,6 +739,337 @@ function renderEmotions() {
     el.innerHTML = html;
 }
 
+/* ── Character voice fingerprint ───────────────────────────────────────── */
+function renderCharFingerprint() {
+    var el = document.getElementById('charFingerprint');
+    var profiles = _data.characterProfiles;
+    if (!profiles || profiles.length === 0) {
+        el.innerHTML = '<div class=""empty-state"">No character profiles — assign viewpoint characters to scenes and re-run analysis.</div>';
+        return;
+    }
+
+    // Initialize visibility
+    profiles.forEach(function(p){ _charVisible[p.id] = true; });
+
+    // Build toggle buttons
+    var toggleHtml = '<div class=""char-toggles"" id=""charToggles"">';
+    profiles.forEach(function(p) {
+        toggleHtml += '<button class=""char-toggle-btn"" id=""btn_'+p.id+'"" '+
+            'style=""border-color:'+p.color+';color:'+p.color+'"" '+
+            'onclick=""toggleChar(\''+p.id+'\')"">' + escHtml(p.name) + '</button>';
+    });
+    toggleHtml += '</div>';
+
+    el.innerHTML = toggleHtml +
+        '<div class=""char-panel"">' +
+        '<div class=""radar-wrapper""><canvas id=""radarChart"" width=""340"" height=""340""></canvas></div>' +
+        '<div style=""flex:1;min-width:200px;"">' +
+        '<div id=""wordClouds""></div>' +
+        '</div></div>' +
+        '<h2 style=""margin-top:20px"">Voice Consistency Timeline</h2>' +
+        '<div class=""chart-area timeline-wrapper""><div class=""timeline-canvas-area"">' +
+        '<canvas id=""timelineChart"" height=""160""></canvas>' +
+        '</div></div>';
+
+    drawRadar(profiles);
+    renderWordClouds(profiles);
+    drawTimeline(profiles);
+}
+
+function toggleChar(id) {
+    _charVisible[id] = !_charVisible[id];
+    var btn = document.getElementById('btn_'+id);
+    if (btn) btn.classList.toggle('off', !_charVisible[id]);
+    var profiles = _data.characterProfiles.filter(function(p){ return _charVisible[p.id]; });
+    if (_radarChart) { _radarChart.destroy(); _radarChart = null; }
+    if (_timelineChart) { _timelineChart.destroy(); _timelineChart = null; }
+    drawRadar(profiles);
+    drawTimeline(profiles);
+}
+
+function normalizeProfiles(profiles) {
+    // Normalise all 8 axes to 0-1 across the set of profiles
+    var keys = ['avgSentenceLength','vocabRichness','contractionRate','dialogueRatio',
+                'adverbDensity','passiveVoiceRate','clauseComplexity','readabilityScore'];
+    var mins = {}, maxs = {};
+    keys.forEach(function(k){ mins[k]=Infinity; maxs[k]=-Infinity; });
+    profiles.forEach(function(p) {
+        keys.forEach(function(k) {
+            if (p[k] < mins[k]) mins[k] = p[k];
+            if (p[k] > maxs[k]) maxs[k] = p[k];
+        });
+    });
+    return profiles.map(function(p) {
+        var norm = {};
+        keys.forEach(function(k) {
+            var range = maxs[k] - mins[k];
+            norm[k] = range > 0 ? (p[k] - mins[k]) / range : 0.5;
+        });
+        // Formality = inverse contraction rate; Complexity = inverse readability
+        norm.contractionRate = 1 - norm.contractionRate;
+        norm.readabilityScore = 1 - norm.readabilityScore;
+        return Object.assign({}, p, norm);
+    });
+}
+
+function drawRadar(profiles) {
+    var ctx = document.getElementById('radarChart');
+    if (!ctx || !profiles || profiles.length === 0) return;
+    var normalised = normalizeProfiles(profiles);
+    var labels = ['Sentence Length','Vocab Richness','Formality','Dialogue','Adverb Density','Passive Voice','Clause Depth','Complexity'];
+    var datasets = normalised.map(function(p) {
+        var hex = p.color;
+        return {
+            label: p.name,
+            data: [p.avgSentenceLength, p.vocabRichness, p.contractionRate, p.dialogueRatio,
+                   p.adverbDensity, p.passiveVoiceRate, p.clauseComplexity, p.readabilityScore],
+            borderColor: hex,
+            backgroundColor: hex + '22',
+            pointBackgroundColor: hex,
+            pointRadius: 3,
+            borderWidth: 2
+        };
+    });
+    _radarChart = new Chart(ctx, {
+        type: 'radar',
+        data: { labels: labels, datasets: datasets },
+        options: {
+            responsive: false,
+            plugins: { legend: { labels: { color:'#E8E4DC', font:{size:11} } } },
+            scales: {
+                r: {
+                    min: 0, max: 1,
+                    ticks: { display:false },
+                    grid: { color:'#3A3A48' },
+                    angleLines: { color:'#3A3A48' },
+                    pointLabels: { color:'#9E9AA0', font:{size:10} }
+                }
+            }
+        }
+    });
+}
+
+function renderWordClouds(profiles) {
+    var el = document.getElementById('wordClouds');
+    if (!el) return;
+    var html = '';
+    profiles.forEach(function(p) {
+        if (!p.distinctiveWords || p.distinctiveWords.length === 0) return;
+        html += '<div style=""margin-bottom:12px;"">' +
+            '<div style=""font-size:11px;color:'+p.color+';font-weight:600;margin-bottom:5px;"">'+escHtml(p.name)+'</div>' +
+            '<div class=""word-cloud"">';
+        var maxW = Math.max.apply(null, p.distinctiveWords.map(function(w){return w.weight;}));
+        if (maxW <= 0) maxW = 1;
+        p.distinctiveWords.forEach(function(w) {
+            var ratio = w.weight / maxW;
+            var size = Math.round(10 + ratio * 6);
+            var alpha = Math.round(60 + ratio * 195).toString(16).padStart(2,'0');
+            html += '<span class=""word-chip"" style=""background:'+p.color+alpha+';font-size:'+size+'px;"">'+
+                escHtml(w.word)+'</span>';
+        });
+        html += '</div></div>';
+    });
+    el.innerHTML = html || '<div class=""empty-state"" style=""padding:8px 0"">No distinctive words computed.</div>';
+}
+
+function drawTimeline(profiles) {
+    var canvas = document.getElementById('timelineChart');
+    if (!canvas) return;
+    var validProfiles = profiles.filter(function(p){ return p.sceneSnapshots && p.sceneSnapshots.length > 1; });
+    if (validProfiles.length === 0) {
+        canvas.parentElement.innerHTML = '<div class=""empty-state"">Need at least 2 scenes per character for a timeline.</div>';
+        return;
+    }
+
+    // Use readabilityScore as the primary timeline metric (most human-readable)
+    var maxSnaps = Math.max.apply(null, validProfiles.map(function(p){return p.sceneSnapshots.length;}));
+    var labels = [];
+    for (var i = 0; i < maxSnaps; i++) labels.push('Scene '+(i+1));
+
+    var datasets = validProfiles.map(function(p) {
+        var values = p.sceneSnapshots.map(function(s){ return Math.round(s.readabilityScore); });
+        return {
+            label: p.name + ' (Readability)',
+            data: values,
+            borderColor: p.color,
+            backgroundColor: 'transparent',
+            pointBackgroundColor: p.color,
+            tension: 0.35,
+            borderWidth: 2,
+            pointRadius: 4
+        };
+    });
+
+    // Set canvas width based on scene count
+    canvas.width = Math.max(400, maxSnaps * 60);
+
+    _timelineChart = new Chart(canvas, {
+        type: 'line',
+        data: { labels: labels, datasets: datasets },
+        options: {
+            responsive: false,
+            animation: false,
+            plugins: { legend: { labels: { color:'#E8E4DC', font:{size:11} } },
+                       tooltip: { callbacks: { label: function(ctx) {
+                           var snap = validProfiles[ctx.datasetIndex]?.sceneSnapshots[ctx.dataIndex];
+                           if (!snap) return ctx.dataset.label+': '+ctx.parsed.y;
+                           return ctx.dataset.label+': '+ctx.parsed.y+' ('+snap.scene+')';
+                       }}}},
+            scales: {
+                x: { ticks: { color:'#9E9AA0', font:{size:10} }, grid: { color:'#3A3A48' } },
+                y: { min:0, max:100,
+                     title: { display:true, text:'Readability (Flesch)', color:'#9E9AA0', font:{size:10} },
+                     ticks: { color:'#9E9AA0', font:{size:10} }, grid: { color:'#3A3A48' } }
+            }
+        }
+    });
+}
+
+/* ── Dialogue voice fingerprint ───────────────────────────────────────── */
+var _dialogueRadarChart = null;
+var _dialogueCharVisible = {};
+var DIALOGUE_RADAR_AXES = ['Sentence\nLength','Vocab\nRichness','Formality','Exclamation','Adverb\nDensity','Passive\nVoice','Clause\nDepth','Complexity'];
+
+function renderDialogueFingerprint() {
+    var el = document.getElementById('dialogueFingerprint');
+    var profiles = _data.dialogueProfiles;
+    if (!profiles || profiles.length === 0) {
+        el.innerHTML = '<div class=""empty-state"">No dialogue profiles \u2014 ensure characters are defined and dialogue uses speech tags (e.g. \u201CHello,\u201D Sarah said).</div>';
+        return;
+    }
+
+    profiles.forEach(function(p){ _dialogueCharVisible[p.id] = true; });
+
+    var toggleHtml = '<div class=""char-toggles"" id=""dialogueCharToggles"">';
+    profiles.forEach(function(p) {
+        toggleHtml += '<button class=""char-toggle-btn"" id=""dbtn_'+p.id+'"" '+
+            'style=""border-color:'+p.color+';color:'+p.color+'"" '+
+            'onclick=""toggleDialogueChar(\''+p.id+'\')"">' + escHtml(p.name) +
+            ' <span style=""font-size:9px;opacity:.6"">('+p.dialogueLineCount+' lines)</span></button>';
+    });
+    toggleHtml += '</div>';
+
+    el.innerHTML = toggleHtml +
+        '<div class=""char-panel"">' +
+        '<div class=""radar-wrapper""><canvas id=""dialogueRadarChart"" width=""340"" height=""340""></canvas></div>' +
+        '<div style=""flex:1;min-width:200px;"">' +
+        '<div id=""dialogueWordClouds""></div>' +
+        '<div id=""similarityWarnings"" style=""margin-top:12px;""></div>' +
+        '</div></div>';
+
+    drawDialogueRadar(profiles);
+    renderDialogueWordClouds(profiles);
+    renderSimilarityWarnings();
+}
+
+function toggleDialogueChar(id) {
+    _dialogueCharVisible[id] = !_dialogueCharVisible[id];
+    var btn = document.getElementById('dbtn_'+id);
+    if (btn) btn.classList.toggle('off', !_dialogueCharVisible[id]);
+    var profiles = _data.dialogueProfiles.filter(function(p){ return _dialogueCharVisible[p.id]; });
+    if (_dialogueRadarChart) { _dialogueRadarChart.destroy(); _dialogueRadarChart = null; }
+    drawDialogueRadar(profiles);
+}
+
+function normalizeDialogueProfiles(profiles, allProfiles) {
+    var keys = ['avgSentenceLength','vocabRichness','contractionRate','exclamationRate',
+                'adverbDensity','passiveVoiceRate','clauseComplexity','readabilityScore'];
+    var mins = {}, maxs = {};
+    keys.forEach(function(k){ mins[k]=Infinity; maxs[k]=-Infinity; });
+    allProfiles.forEach(function(p) {
+        keys.forEach(function(k) {
+            if (p[k] < mins[k]) mins[k] = p[k];
+            if (p[k] > maxs[k]) maxs[k] = p[k];
+        });
+    });
+    return profiles.map(function(p) {
+        var norm = {};
+        keys.forEach(function(k) {
+            var range = maxs[k] - mins[k];
+            norm[k] = range > 0 ? (p[k] - mins[k]) / range : 0.5;
+        });
+        norm.contractionRate = 1 - norm.contractionRate;
+        norm.readabilityScore = 1 - norm.readabilityScore;
+        return Object.assign({}, p, norm);
+    });
+}
+
+function drawDialogueRadar(profiles) {
+    var ctx = document.getElementById('dialogueRadarChart');
+    if (!ctx || !profiles || profiles.length === 0) return;
+    var normalised = normalizeDialogueProfiles(profiles, _data.dialogueProfiles);
+    var labels = ['Sentence Length','Vocab Richness','Formality','Exclamation','Adverb Density','Passive Voice','Clause Depth','Complexity'];
+    var datasets = normalised.map(function(p) {
+        return {
+            label: p.name,
+            data: [p.avgSentenceLength, p.vocabRichness, p.contractionRate, p.exclamationRate,
+                   p.adverbDensity, p.passiveVoiceRate, p.clauseComplexity, p.readabilityScore],
+            borderColor: p.color,
+            backgroundColor: p.color + '22',
+            pointBackgroundColor: p.color,
+            pointRadius: 3,
+            borderWidth: 2
+        };
+    });
+    _dialogueRadarChart = new Chart(ctx, {
+        type: 'radar',
+        data: { labels: labels, datasets: datasets },
+        options: {
+            responsive: false,
+            plugins: { legend: { labels: { color:'#E8E4DC', font:{size:11} } } },
+            scales: {
+                r: {
+                    min: 0, max: 1,
+                    ticks: { display:false },
+                    grid: { color:'#3A3A48' },
+                    angleLines: { color:'#3A3A48' },
+                    pointLabels: { color:'#9E9AA0', font:{size:10} }
+                }
+            }
+        }
+    });
+}
+
+function renderDialogueWordClouds(profiles) {
+    var el = document.getElementById('dialogueWordClouds');
+    if (!el) return;
+    var html = '';
+    profiles.forEach(function(p) {
+        if (!p.distinctiveWords || p.distinctiveWords.length === 0) return;
+        html += '<div style=""margin-bottom:12px;"">' +
+            '<div style=""font-size:11px;color:'+p.color+';font-weight:600;margin-bottom:5px;"">'+escHtml(p.name)+' \u2014 Dialogue</div>' +
+            '<div class=""word-cloud"">';
+        var maxW = Math.max.apply(null, p.distinctiveWords.map(function(w){return w.weight;}));
+        if (maxW <= 0) maxW = 1;
+        p.distinctiveWords.forEach(function(w) {
+            var ratio = w.weight / maxW;
+            var size = Math.round(10 + ratio * 6);
+            var alpha = Math.round(60 + ratio * 195).toString(16).padStart(2,'0');
+            html += '<span class=""word-chip"" style=""background:'+p.color+alpha+';font-size:'+size+'px;"">'+
+                escHtml(w.word)+'</span>';
+        });
+        html += '</div></div>';
+    });
+    el.innerHTML = html || '<div class=""empty-state"" style=""padding:8px 0"">No distinctive dialogue words computed.</div>';
+}
+
+function renderSimilarityWarnings() {
+    var el = document.getElementById('similarityWarnings');
+    if (!el) return;
+    if (!_data.notes) { el.innerHTML = ''; return; }
+    var warnings = _data.notes.filter(function(n){
+        return n.category === 'Developmental Editor' && n.message && n.message.indexOf('sound very similar in dialogue') >= 0;
+    });
+    if (warnings.length === 0) { el.innerHTML = ''; return; }
+    var html = '<div style=""font-size:11px;font-weight:600;color:#E5C07B;margin-bottom:6px;"">\u26A0 Voice Similarity Warnings</div>';
+    warnings.forEach(function(n) {
+        html += '<div style=""background:#2A2A35;border:1px solid #E5C07B44;border-radius:4px;padding:8px 10px;margin-bottom:6px;font-size:11px;color:#C8C4BC;line-height:1.45;"">'+
+            escHtml(n.message)+'</div>';
+    });
+    el.innerHTML = html;
+}
+
+/* ── All notes (flat list after triage) ────────────────────────────────── */
 function renderNotes() {
     var el = document.getElementById('notes');
     if (!_data.notes || _data.notes.length === 0) {
@@ -613,25 +1079,56 @@ function renderNotes() {
     var html = '';
     _data.notes.forEach(function(n) {
         var color = SEVERITY_COLORS[n.severity] || '#61AFEF';
-        html += '<div class=""note-card"">' +
-            '<div class=""note-header"">' +
+        var crumb = [n.chapter, n.scene].filter(Boolean).join(' \u203a ');
+        var hasNav = !!n.sceneId;
+        var navAttr = hasNav
+            ? ' onclick=""navigateToNote(\'' + escAttr(n.sceneId) + '\',' + (n.sentenceIndex >= 0 ? n.sentenceIndex : -1) + ')"" title=""Jump to this sentence in the editor""'
+            : '';
+        var hint = hasNav
+            ? (n.sentenceIndex >= 0 ? 'Click to jump to sentence' : 'Click to open scene')
+            : '';
+        html += '<div class=""note-card""' + navAttr + '>' +
+            '<div class=""note-card-header"">' +
             '<div class=""note-dot"" style=""background:'+color+'""></div>' +
-            '<span class=""note-cat"">'+n.category+(n.chapter?' / '+n.chapter:'')+
-            (n.scene?' / '+n.scene:'')+'</span></div>' +
-            '<div class=""note-msg"">'+escHtml(n.message)+'</div></div>';
+            '<span class=""note-meta"">'+escHtml(n.category)+
+            (crumb ? ' \u00b7 '+escHtml(crumb) : '')+'</span></div>' +
+            '<div style=""font-size:12px;color:#E8E4DC;line-height:1.5;"">'+escHtml(n.message)+'</div>'+
+            (hint ? '<div class=""note-nav-hint"">'+escHtml(hint)+'</div>' : '')+
+            '</div>';
     });
     el.innerHTML = html;
 }
 
 function escHtml(s) {
-    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+    if (!s) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+
+function escAttr(s) {
+    if (!s) return '';
+    return String(s).replace(/\\/g,'\\\\').replace(/'/g,'\\'+'\'');
+}
+
+function navigateToNote(sceneId, sentenceIndex) {
+    if (!sceneId) return;
+    var url = 'alphawriter://noteNavigate?sceneId=' + encodeURIComponent(sceneId);
+    if (sentenceIndex >= 0) url += '&sentenceIndex=' + sentenceIndex;
+    window.location.href = url;
 }
 ";
+
+            // Chart.js is inlined (caller loaded it from Resources/Raw via FileSystem.OpenAppPackageFileAsync)
+            string chartJsScript = string.IsNullOrEmpty(chartJs)
+                ? string.Empty
+                : "<script>" + chartJs + "</" + "script>";
 
             const string bodyHtml = @"
 <div class=""container"">
     <h2>Overview</h2>
     <div id=""overview"" class=""stats-grid""></div>
+
+    <h2>Editorial Triage</h2>
+    <div id=""triage""></div>
 
     <h2>Pacing Heatmap</h2>
     <div id=""pacing"" class=""chart-area""></div>
@@ -642,13 +1139,21 @@ function escHtml(s) {
     <h2>Emotion Distribution</h2>
     <div id=""emotions"" class=""chart-area""></div>
 
-    <h2>Analysis Notes</h2>
+    <h2>Character Voice Fingerprint</h2>
+    <div id=""charFingerprint"" class=""chart-area""></div>
+
+    <h2>Dialogue Voice Fingerprint</h2>
+    <div id=""dialogueFingerprint"" class=""chart-area""></div>
+
+    <h2>All Notes</h2>
     <div id=""notes""></div>
 </div>
 ";
 
             return "<!DOCTYPE html><html><head><meta charset=\"utf-8\"/>"
-                 + "<style>" + css + "</style></head><body>"
+                 + "<style>" + css + "</style>"
+                 + chartJsScript
+                 + "</head><body>"
                  + bodyHtml
                  + "<script>" + appJs
                  + "init(" + dataJson + ");"
@@ -931,5 +1436,103 @@ function escHtml(s) {
 
         private async void OnUnderlineClicked(object sender, EventArgs e)
             => await EditorWebView.EvaluateJavaScriptAsync("execFormat('underline')");
+
+        // ── Prose heat map overlay ────────────────────────────────────────────
+
+        private async void OnHeatMapClicked(object sender, EventArgs e)
+        {
+            if (!_editorReady) return;
+
+            _heatMapActive = !_heatMapActive;
+
+            // Update button visual state
+            if (HeatMapButton is not null)
+            {
+                HeatMapButton.Opacity = _heatMapActive ? 1.0 : 0.5;
+                HeatMapButton.BackgroundColor = _heatMapActive
+                    ? Color.FromArgb("#3A3A5A")
+                    : Colors.Transparent;
+            }
+
+            if (_heatMapActive)
+            {
+                var heatJson = _viewModel.BuildHeatMapJson();
+                if (!string.IsNullOrEmpty(heatJson))
+                    await EditorWebView.EvaluateJavaScriptAsync($"applyHeatMap({heatJson})");
+            }
+            else
+            {
+                await EditorWebView.EvaluateJavaScriptAsync("clearHeatMap()");
+            }
+        }
+
+        /// <summary>
+        /// Called when a new scene is loaded into the editor — reapplies the heat map
+        /// if it was active so overlays appear on the new content.
+        /// </summary>
+        private async Task ReapplyHeatMapIfActiveAsync()
+        {
+            if (!_heatMapActive || !_editorReady) return;
+            var heatJson = _viewModel.BuildHeatMapJson();
+            if (!string.IsNullOrEmpty(heatJson))
+                await EditorWebView.EvaluateJavaScriptAsync($"applyHeatMap({heatJson})");
+        }
+
+        // ── Note navigation from report panel ─────────────────────────────────
+
+        private async void OnReportNavigating(object? sender, WebNavigatingEventArgs e)
+        {
+            if (!e.Url.StartsWith("alphawriter://noteNavigate", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            e.Cancel = true;
+
+            var sceneId     = ExtractQueryParam(e.Url, "sceneId");
+            var sentIdxStr  = ExtractQueryParam(e.Url, "sentenceIndex");
+            int? sentenceIdx = int.TryParse(sentIdxStr, out var si) && si >= 0 ? si : null;
+
+            if (sceneId is null) return;
+            await NavigateToNoteAsync(sceneId, sentenceIdx);
+        }
+
+        /// <summary>
+        /// Navigates the editor to the scene identified by <paramref name="sceneId"/>,
+        /// then scrolls to and flash-highlights the sentence at <paramref name="sentenceIndex"/>.
+        /// If the scene is already open, the scroll fires immediately.
+        /// If the scene must be switched, <see cref="_pendingScrollSentenceIndex"/> is set
+        /// so <see cref="LoadSceneAsync"/> applies the scroll after the content loads.
+        /// </summary>
+        private async Task NavigateToNoteAsync(string sceneId, int? sentenceIndex)
+        {
+            if (!_editorReady) return;
+
+            if (_currentEditorScene?.Id == sceneId)
+            {
+                // Scene already loaded — jump directly
+                if (sentenceIndex.HasValue)
+                    await EditorWebView.EvaluateJavaScriptAsync($"scrollToSentence({sentenceIndex.Value})");
+                return;
+            }
+
+            // Find the scene in the book
+            var scene = FindSceneById(sceneId);
+            if (scene is null) return;
+
+            // Store the pending index before triggering the scene switch so that
+            // LoadSceneAsync (which runs on the SelectedSceneChanged path) can consume it.
+            _pendingScrollSentenceIndex = sentenceIndex;
+
+            await MainThread.InvokeOnMainThreadAsync(() =>
+                _viewModel.SelectedScene = scene);
+        }
+
+        private Scene? FindSceneById(string sceneId)
+        {
+            if (_viewModel.SelectedBook is null) return null;
+            foreach (var chapter in _viewModel.SelectedBook.Chapters)
+                foreach (var scene in chapter.Scenes)
+                    if (scene.Id == sceneId) return scene;
+            return null;
+        }
     }
 }

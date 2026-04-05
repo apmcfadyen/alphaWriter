@@ -80,7 +80,7 @@ public class PacingAnalyzerTests
             LongestNarrationStreak = 5
         };
         var notes = _analyzer.DetectIssues(metrics, "s1", "Long Scene", "Ch1");
-        Assert.Contains(notes, n => n.Category == NlpNoteCategory.Structure);
+        Assert.Contains(notes, n => n.Category == NlpNoteCategory.DevelopmentalEditor);
     }
 
     [Fact]
@@ -94,7 +94,7 @@ public class PacingAnalyzerTests
             LongestNarrationStreak = 2
         };
         var notes = _analyzer.DetectIssues(metrics, "s1", "Tiny Scene", "Ch1");
-        Assert.Contains(notes, n => n.Category == NlpNoteCategory.Structure && n.Severity == NlpNoteSeverity.Info);
+        Assert.Contains(notes, n => n.Category == NlpNoteCategory.DevelopmentalEditor && n.Severity == NlpNoteSeverity.Info);
     }
 
     [Fact]
@@ -108,7 +108,7 @@ public class PacingAnalyzerTests
             LongestNarrationStreak = 20
         };
         var notes = _analyzer.DetectIssues(metrics, "s1", "Dense Scene", "Ch1");
-        Assert.Contains(notes, n => n.Category == NlpNoteCategory.Pacing);
+        Assert.Contains(notes, n => n.Category == NlpNoteCategory.DevelopmentalEditor);
     }
 
     [Fact]
