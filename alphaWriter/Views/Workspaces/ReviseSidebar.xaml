@@ -9,6 +9,7 @@
              xmlns:vm="clr-namespace:alphaWriter.ViewModels"
              xmlns:analysis="clr-namespace:alphaWriter.Models.Analysis"
              xmlns:converters="clr-namespace:alphaWriter.Converters"
+             xmlns:nlp="clr-namespace:alphaWriter.Services.Nlp"
              x:Class="alphaWriter.Views.Workspaces.ReviseSidebar">
 
     <ContentView.Resources>
@@ -62,7 +63,7 @@
                    TextColor="{StaticResource TextSecondary}" FontSize="11" FontAttributes="Italic"
                    LineBreakMode="WordWrap"
                    IsVisible="{Binding AnalysisProgress, Converter={StaticResource IsNotNullOrEmptyConverter}}" />
-            <HorizontalStackLayout Spacing="2">
+            <FlexLayout Wrap="Wrap">
                 <Button Text="Download models" Style="{StaticResource SmallLink}"
                         Command="{Binding DownloadModelsCommand}"
                         ToolTipProperties.Text="Optional (~330 MB): adds emotion, tone-shift and topic analysis. Runs entirely on this computer." />
@@ -70,11 +71,15 @@
                         Command="{Binding ShowNlpReportCommand}"
                         IsVisible="{Binding HasAnalysisResults}"
                         ToolTipProperties.Text="Pacing, style, emotion and voice charts (Insights)" />
+                <Button Text="Export summary" Style="{StaticResource SmallLink}"
+                        Command="{Binding ExportSummaryCommand}"
+                        IsVisible="{Binding HasAnalysisResults}"
+                        ToolTipProperties.Text="Save an editorial summary of the whole book as a web page you can print or share" />
                 <Button Text="Clear" Style="{StaticResource SmallLink}"
                         Command="{Binding ClearAnalysisCommand}"
                         IsVisible="{Binding HasAnalysisResults}"
                         ToolTipProperties.Text="Clear the analysis results" />
-            </HorizontalStackLayout>
+            </FlexLayout>
 
             <!-- Scope + filters -->
             <Grid ColumnDefinitions="*,*" ColumnSpacing="4" IsVisible="{Binding IsBrowsingNotes}">
@@ -166,6 +171,53 @@
                         IsVisible="{Binding IsNotesListVisible}"
                         SelectionMode="None"
                         Margin="6,0,6,6">
+            <CollectionView.Header>
+                <!-- The open scene at a glance -->
+                <Border IsVisible="{Binding IsSceneCardVisible}"
+                        StrokeShape="RoundRectangle 6"
+                        Stroke="{StaticResource SurfaceRaised}"
+                        BackgroundColor="{StaticResource SurfaceMid}"
+                        Padding="10,8" Margin="0,4,0,4">
+                    <VerticalStackLayout Spacing="5">
+                        <Label Text="SCENE AT A GLANCE" TextColor="{StaticResource TextSecondary}" FontSize="10" FontAttributes="Bold" />
+                        <Label Text="{Binding SceneCard.Stats}" TextColor="{StaticResource TextPrimary}" FontSize="11" LineBreakMode="WordWrap" />
+
+                        <Label Text="Shape" TextColor="{StaticResource TextSecondary}" FontSize="10" Margin="0,2,0,0"
+                               IsVisible="{Binding SceneCard.HasBeats, FallbackValue=False}" />
+                        <FlexLayout BindableLayout.ItemsSource="{Binding SceneCard.Beats}" HeightRequest="10"
+                                    IsVisible="{Binding SceneCard.HasBeats, FallbackValue=False}">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="nlp:StripSegment">
+                                    <BoxView Color="{Binding Color}" FlexLayout.Grow="{Binding Grow}" FlexLayout.Basis="0"
+                                             Margin="0,0,1,0" ToolTipProperties.Text="{Binding Tip}" />
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </FlexLayout>
+                        <Label Text="{Binding SceneCard.BeatSummary}" TextColor="{StaticResource TextSecondary}" FontSize="10"
+                               LineBreakMode="WordWrap" IsVisible="{Binding SceneCard.HasBeats, FallbackValue=False}"
+                               ToolTipProperties.Text="Paragraphs by what they mostly do: dialogue (blue), action (red), interiority (purple), description (green), exposition (orange)" />
+
+                        <Label Text="Senses" TextColor="{StaticResource TextSecondary}" FontSize="10" Margin="0,2,0,0"
+                               IsVisible="{Binding SceneCard.HasSenses, FallbackValue=False}" />
+                        <FlexLayout BindableLayout.ItemsSource="{Binding SceneCard.Senses}" HeightRequest="10"
+                                    IsVisible="{Binding SceneCard.HasSenses, FallbackValue=False}">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="nlp:StripSegment">
+                                    <BoxView Color="{Binding Color}" FlexLayout.Grow="{Binding Grow}" FlexLayout.Basis="0"
+                                             Margin="0,0,1,0" ToolTipProperties.Text="{Binding Tip}" />
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </FlexLayout>
+                        <Label Text="{Binding SceneCard.SenseSummary}" TextColor="{StaticResource TextSecondary}" FontSize="10"
+                               LineBreakMode="WordWrap" IsVisible="{Binding SceneCard.HasSenses, FallbackValue=False}"
+                               ToolTipProperties.Text="Sound (yellow), taste (purple), touch (orange), body (red), smell (green), sight (blue)" />
+
+                        <Label Text="{Binding SceneCard.TensionSummary}" TextColor="{StaticResource TextPrimary}" FontSize="11"
+                               LineBreakMode="WordWrap" IsVisible="{Binding SceneCard.HasTension, FallbackValue=False}" Margin="0,2,0,0" />
+                        <Label Text="{Binding SceneCard.NoteSummary}" TextColor="{StaticResource TextAccent}" FontSize="11" />
+                    </VerticalStackLayout>
+                </Border>
+            </CollectionView.Header>
             <CollectionView.GroupHeaderTemplate>
                 <DataTemplate x:DataType="vm:NoteGroup">
                     <Label Text="{Binding Header}"

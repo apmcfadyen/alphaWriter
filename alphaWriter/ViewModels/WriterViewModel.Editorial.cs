@@ -105,6 +105,7 @@ namespace alphaWriter.ViewModels
             ReviseNoteGroups = new ObservableCollection<NoteGroup>(groups);
             OnPropertyChanged(nameof(ReviseSummary));
             UpdatePassProgress();
+            RefreshSceneCard();
 
             static IEnumerable<NlpNote> Order(IEnumerable<NlpNote> ns) => ns
                 .OrderBy(n => n.SentenceIndex ?? -1)
@@ -381,7 +382,14 @@ namespace alphaWriter.ViewModels
 
             var result = _analysisResults?.FirstOrDefault(r => r.SceneId == sceneId);
             if (result is not null)
+            {
                 result.Notes = _allNotes.Where(n => n.SceneId == sceneId).ToList();
+                // Keep the scene's report card current while the author edits
+                result.Style = live.Result.Style;
+                result.ParagraphBeats = live.Result.ParagraphBeats;
+                result.Senses = live.Result.Senses;
+                result.Tension = live.Result.Tension;
+            }
 
             ApplyNoteFilters();
             PopulateSceneNoteCounts(_allNotes);

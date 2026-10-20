@@ -122,6 +122,7 @@ namespace alphaWriter.ViewModels
         [ObservableProperty]
         [NotifyPropertyChangedFor(nameof(IsPassActive))]
         [NotifyPropertyChangedFor(nameof(IsBrowsingNotes))]
+        [NotifyPropertyChangedFor(nameof(IsSceneCardVisible))]
         [NotifyPropertyChangedFor(nameof(ActivePassTitle))]
         [NotifyPropertyChangedFor(nameof(ActivePassDescription))]
         private string? activePassRuleId;

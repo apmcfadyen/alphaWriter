@@ -775,6 +775,7 @@ function init(data) {
     renderPacingHeatmap();
     renderArc();
     renderSenses();
+    renderBenchmarks();
     renderStyleChart();
     renderEmotions();
     renderCharFingerprint();
@@ -957,6 +958,24 @@ function renderArc() {
                 title:function(items){ var p = arc[items[0].dataIndex]; return p.title + ' (' + p.chapter + ')'; } } } },
             scales:scales }
     });
+}
+
+/* ── Genre guidelines ──────────────────────────────────────────────────── */
+function renderBenchmarks() {
+    var el = document.getElementById('benchmarks');
+    var rows = _data.benchmarks || [];
+    if (rows.length === 0) { el.innerHTML = '<div class=""empty-state"">No measurements yet.</div>'; return; }
+    var colors = { below:'#E5C07B', within:'#61C88A', above:'#E5C07B' };
+    var html = '<table style=""width:100%;border-collapse:collapse;font-size:12px"">' +
+        '<tr style=""color:#9E9AA0;text-align:left""><th style=""padding:4px 6px"">Measure</th><th>This book</th><th>Typical ' + escHtml(_data.genre || '') + '</th><th></th></tr>';
+    rows.forEach(function(r) {
+        html += '<tr style=""border-top:1px solid #3A3A48""><td style=""padding:6px"">' + escHtml(r.label) +
+            '<div style=""font-size:10px;color:#9E9AA0"">' + escHtml(r.advice) + '</div></td>' +
+            '<td style=""font-weight:600"">' + escHtml(r.value) + '</td><td style=""color:#9E9AA0"">' + escHtml(r.range) + '</td>' +
+            '<td style=""color:' + colors[r.verdict] + '"">' + r.verdict + '</td></tr>';
+    });
+    html += '</table><div style=""font-size:10px;color:#7A7A8A;margin-top:6px"">Rules of thumb, not measurements of published books. Change the genre in Revise settings.</div>';
+    el.innerHTML = html;
 }
 
 /* ── Sensory palette per scene ─────────────────────────────────────────── */
@@ -1388,6 +1407,9 @@ function navigateToNote(sceneId, sentenceIndex) {
 
     <h2>Story Arc</h2>
     <div id=""arc"" class=""chart-area""></div>
+
+    <h2>Genre Guidelines</h2>
+    <div id=""benchmarks"" class=""chart-area""></div>
 
     <h2>Sensory Palette</h2>
     <div id=""senses"" class=""chart-area""></div>

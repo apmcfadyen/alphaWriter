@@ -1022,6 +1022,7 @@ namespace alphaWriter.ViewModels
         {
             _allNotes = [];
             _analysisResults = null;
+            SceneCard = null;
             _voiceProfiles = [];
             _dialogueProfiles = [];
             NlpNotes = [];
@@ -1579,7 +1580,19 @@ namespace alphaWriter.ViewModels
             }).ToList();
 
             return System.Text.Json.JsonSerializer.Serialize(
-                new { scenes, notes, characterProfiles, dialogueProfiles, arc },
+                new
+                {
+                    scenes, notes, characterProfiles, dialogueProfiles, arc,
+                    genre = SelectedBook?.StyleSheet?.Genre ?? EditorialStyleSheet.DefaultGenre,
+                    benchmarks = BenchmarkRows.Select(r => new
+                    {
+                        label = r.Benchmark.Label,
+                        advice = r.Benchmark.Advice,
+                        value = r.ValueText,
+                        range = r.RangeText,
+                        verdict = r.Verdict.ToString().ToLowerInvariant()
+                    })
+                },
                 new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase });
         }
 
