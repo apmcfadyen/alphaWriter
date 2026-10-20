@@ -14,7 +14,7 @@ namespace alphaWriter.Services.Nlp.Rules
         /// Bump when scene-rule output changes, so cached per-scene results are recomputed
         /// instead of reused.
         /// </summary>
-        public const int EngineVersion = 2;
+        public const int EngineVersion = 3;
 
         private const NlpNoteCategory Copy = NlpNoteCategory.CopyEditor;
         private const NlpNoteCategory Line = NlpNoteCategory.LineEditor;
@@ -136,6 +136,28 @@ namespace alphaWriter.Services.Nlp.Rules
             "Cast names so similar that readers may confuse them.",
             Dev, RuleTier.Book, RuleScope.Book);
 
+        // ── Reference, tense & consistency (Phase 1, batch 2) ───────────────
+
+        public static readonly RuleDescriptor AmbiguousPronoun = new(
+            "style.ambiguous-pronoun", "Ambiguous pronouns",
+            "A he/she that could refer to two characters named just before it. Uses each character’s pronouns from the Story Bible, or a guess from the text.",
+            Line, RuleTier.Lexical, RuleScope.Scene);
+
+        public static readonly RuleDescriptor TenseDrift = new(
+            "style.tense-drift", "Tense drift",
+            "Narration slipping between past and present tense within a scene.",
+            Line, RuleTier.Lexical, RuleScope.Scene);
+
+        public static readonly RuleDescriptor GestureTics = new(
+            "style.gesture-tics", "Gesture tics",
+            "Nods, shrugs, sighs and other beats repeated within a scene, or across the book by the same characters.",
+            Line, RuleTier.Lexical, RuleScope.Scene);
+
+        public static readonly RuleDescriptor ConsistencySheet = new(
+            "consistency.style-sheet", "Consistency sheet",
+            "Spellings, hyphenation, dashes and ellipses written more than one way. The book’s majority choice wins. One-click fix.",
+            Copy, RuleTier.Book, RuleScope.Book);
+
         // ── Chapter comparisons ─────────────────────────────────────────────
 
         public static readonly RuleDescriptor SentenceLengthDrift = new(
@@ -241,6 +263,7 @@ namespace alphaWriter.Services.Nlp.Rules
             ClauseStacking, ClauseDensity, Passive, OpenerMonotony,
             PovSlip, FilterWords, DialogueTagPunctuation, DialogueTagVerbs, DialogueAdverbTags, TalkingHeads,
             Redundancy, Cliche, CrutchWords, NameSpelling, SimilarNames,
+            AmbiguousPronoun, TenseDrift, GestureTics, ConsistencySheet,
             SentenceLengthDrift, VocabularyDrift, ReadabilityDrift, SceneOutlier, TopicDrift, ToneShift,
             SceneCount, ChapterLength, DialogueBalance, ContractionShift, SceneOpening, SceneClosing,
             FormalityDrift, VocabularyPlateau, ActPacing, EmotionalFlatline, DialogueDesert,

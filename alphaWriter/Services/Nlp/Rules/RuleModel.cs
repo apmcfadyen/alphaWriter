@@ -90,7 +90,7 @@ namespace alphaWriter.Services.Nlp.Rules
         public double Threshold(string ruleId, string setting, double defaultValue) =>
             StyleSheet.GetThreshold(ruleId, setting, defaultValue);
 
-        private static Dictionary<string, Character> BuildCharacterWords(Book? book)
+        internal static Dictionary<string, Character> BuildCharacterWords(Book? book)
         {
             var map = new Dictionary<string, Character>(StringComparer.OrdinalIgnoreCase);
             var shared = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

@@ -57,6 +57,10 @@ LEDGER = paragraphs(
     '"Really?" She asked.',
     "\"It's nothing,\" Tomas smiled. Tomas knew she didn't believe him.",
     "Maya nodded her head and made a decision. She would show Thomas the ledger tomorrow.",
+    # Batch 2 triggers: ambiguous pronoun, Eleonora with no pronouns set (hint in Story Bible)
+    "Tomas handed Erik the ledger. He read it twice.",
+    "Eleonora watched from the stairs. Eleonora gathered her shawl. Eleonora pressed her lips together. "
+    "Eleonora lifted her chin.",
 )
 
 STORM_OUTLINE = paragraphs(
@@ -74,9 +78,11 @@ BOOK = {
     "Chapters": [],
     "Characters": [
         {"Id": uid(), "Name": "Maya", "FullName": "Maya Lindqvist", "Aka": "the harbourmaster's daughter",
-         "Description": "Restless, observant, nineteen.", "Bio": "", "Notes": "", "ImagePath": ""},
+         "Description": "Restless, observant, nineteen.", "Bio": "", "Notes": "", "ImagePath": "", "Pronouns": "she/her"},
         {"Id": uid(), "Name": "Tomas", "FullName": "Tomas Ekberg", "Aka": "Tom",
-         "Description": "Customs clerk with a key he shouldn't have.", "Bio": "", "Notes": "", "ImagePath": ""},
+         "Description": "Customs clerk with a key he shouldn't have.", "Bio": "", "Notes": "", "ImagePath": "", "Pronouns": "he/him"},
+        {"Id": uid(), "Name": "Erik", "FullName": "Erik Lund", "Aka": "",
+         "Description": "The harbourmaster's clerk.", "Bio": "", "Notes": "", "ImagePath": "", "Pronouns": "he/him"},
         {"Id": uid(), "Name": "Eleonora", "FullName": "Eleonora Vass-Holmqvist", "Aka": "",
          "Description": "Owns half the harbour and wants the other half.", "Bio": "", "Notes": "", "ImagePath": ""},
     ],

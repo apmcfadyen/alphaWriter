@@ -110,7 +110,12 @@ namespace alphaWriter.Services.Nlp.Rules
                     // could see it" the perception is part of what is being described.
                     if (!StartsMainClause(tokens, i)) continue;
 
-                    bool isSubject = Lexicons.SubjectPronouns.Contains(subject.Text)
+                    // "he saw" in Maya's scene is someone else's perception, not filtering
+                    var povPronouns = pov is null ? PronounSet.Unknown : PronounInference.For(pov, ctx.Book);
+                    var subjectSet = PronounSets.Of(subject.Text);
+                    bool otherPerson = subjectSet != PronounSet.Unknown && povPronouns != PronounSet.Unknown && subjectSet != povPronouns;
+
+                    bool isSubject = (Lexicons.SubjectPronouns.Contains(subject.Text) && !otherPerson)
                         || (pov is not null ? LineRuleHelpers.CharacterFor(subject, ctx) == pov
                                             : LineRuleHelpers.CharacterFor(subject, ctx) is not null);
                     if (!isSubject) continue;

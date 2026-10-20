@@ -45,6 +45,9 @@ namespace alphaWriter.Services.Nlp.Rules
             new ClicheRule(),
             new CrutchWordsRule(),
             new NameSpellingRule(),
+            new AmbiguousPronounRule(),
+            new TenseDriftRule(),
+            new GestureRepeatRule(),
         ],
         [
             new SceneCountRule(),
@@ -59,6 +62,8 @@ namespace alphaWriter.Services.Nlp.Rules
             new EmotionalFlatlineRule(),
             new DialogueDesertRule(),
             new SimilarNamesRule(),
+            new GestureTicsBookRule(),
+            new ConsistencySheetRule(),
         ]);
 
         /// <summary>Tiers that can run for a document: POS rules need tagged tokens.</summary>

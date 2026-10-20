@@ -380,6 +380,7 @@ namespace alphaWriter.ViewModels
                 ActiveWorkspace = Workspace.StoryBible;
             }
             NotifyElementSelectionDerived();
+            NotifyPronounsChanged();
         }
 
         partial void OnSelectedLocationChanged(Location? value)
@@ -960,6 +961,8 @@ namespace alphaWriter.ViewModels
             {
                 var progress = new Progress<string>(msg => AnalysisProgress = msg);
                 // Unchanged scenes from the previous run are reused rather than re-analyzed
+                // Re-guess pronouns from the current text before rules use them
+                Services.Nlp.Rules.PronounInference.Invalidate(SelectedBook);
                 var (notes, results, profiles, dialogueProfiles) = await _nlpAnalysisService.AnalyzeBookAsync(
                     SelectedBook, progress, ct, _analysisResults);
                 _analysisResults = results;
