@@ -19,6 +19,17 @@ namespace alphaWriter.Models.Analysis
         // Populated in Phase 3 (voice profiling)
         public List<string> ViewpointCharacterIds { get; set; } = [];
 
+        // ── Incremental analysis bookkeeping ─────────────────────────────────
+
+        /// <summary>Hash of the scene HTML this result was computed from.</summary>
+        public string ContentHash { get; set; } = string.Empty;
+
+        /// <summary>Rule engine version that produced the scene-level notes.</summary>
+        public int EngineVersion { get; set; }
+
+        /// <summary>True when POS-tier rules ran for this scene.</summary>
+        public bool HadPos { get; set; }
+
         public int IssueCount => Notes.Count;
     }
 }

@@ -16,6 +16,13 @@ namespace alphaWriter.Services.Nlp
             CancellationToken ct = default);
 
         Task<(List<NlpNote> Notes, List<SceneAnalysisResult> Results, List<CharacterVoiceProfile> VoiceProfiles, List<DialogueVoiceProfile> DialogueProfiles)> AnalyzeBookAsync(Book book,
-            IProgress<string>? progress = null, CancellationToken ct = default);
+            IProgress<string>? progress = null, CancellationToken ct = default,
+            IReadOnlyList<SceneAnalysisResult>? previousResults = null);
+
+        /// <summary>
+        /// Fast single-scene pass for live feedback while editing: lexical rules always,
+        /// POS rules only if the tagger happens to be loaded. No models are loaded.
+        /// </summary>
+        LiveSceneAnalysis AnalyzeSceneLive(Scene scene, Chapter chapter, Book book);
     }
 }

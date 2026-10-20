@@ -7,19 +7,6 @@ namespace alphaWriter.Services.Nlp
 {
     public static class NlpTextExtractor
     {
-        // Common abbreviations that should not trigger sentence breaks.
-        private static readonly HashSet<string> _abbreviations = new(StringComparer.OrdinalIgnoreCase)
-        {
-            "mr", "mrs", "ms", "dr", "prof", "sr", "jr", "st", "ave", "blvd",
-            "dept", "est", "vol", "vs", "etc", "inc", "ltd", "corp", "co",
-            "gen", "gov", "sgt", "cpl", "pvt", "capt", "lt", "col", "cmdr",
-            "adm", "rev", "hon", "pres", "sec", "treas", "amb"
-        };
-
-        private static readonly Regex _sentenceBoundary = new(
-            @"(?<=[.!?])\s+(?=[A-Z""\u201C])",
-            RegexOptions.Compiled);
-
         /// <summary>
         /// Converts scene HTML content to plain text, reusing Scene's existing pipeline.
         /// </summary>
@@ -33,43 +20,22 @@ namespace alphaWriter.Services.Nlp
         }
 
         /// <summary>
-        /// Splits plain text into sentences. Handles abbreviations, quoted dialogue,
-        /// ellipsis, and other common patterns in creative writing.
+        /// Splits plain text into sentences. Sentences never cross paragraph (newline)
+        /// boundaries. Handles abbreviations, quoted dialogue (including a closing quote
+        /// after the terminal punctuation), and ellipses.
         /// </summary>
         public static List<string> SplitSentences(string plainText)
         {
             if (string.IsNullOrWhiteSpace(plainText)) return [];
 
-            // Normalize whitespace
-            var text = Regex.Replace(plainText.Trim(), @"\s+", " ");
-
             var sentences = new List<string>();
-            var candidates = _sentenceBoundary.Split(text);
-
-            // Merge fragments that ended on an abbreviation
-            var merged = new List<string>();
-            foreach (var candidate in candidates)
+            foreach (var line in plainText.Split('\n'))
             {
-                var trimmed = candidate.Trim();
-                if (trimmed.Length == 0) continue;
-
-                if (merged.Count > 0 && EndsWithAbbreviation(merged[^1]))
-                {
-                    merged[^1] = merged[^1] + " " + trimmed;
-                }
-                else
-                {
-                    merged.Add(trimmed);
-                }
+                var paragraph = Regex.Replace(line, @"[\s\u00A0]+", " ").Trim();
+                if (paragraph.Length == 0) continue;
+                foreach (var (start, length) in Parsing.SentenceSplitter.Split(paragraph))
+                    sentences.Add(paragraph.Substring(start, length));
             }
-
-            foreach (var s in merged)
-            {
-                var trimmed = s.Trim();
-                if (trimmed.Length > 0)
-                    sentences.Add(trimmed);
-            }
-
             return sentences;
         }
 
@@ -88,25 +54,6 @@ namespace alphaWriter.Services.Nlp
                     paragraphs.Add(trimmed);
             }
             return paragraphs;
-        }
-
-        /// <summary>
-        /// Checks whether text ends with a known abbreviation followed by a period.
-        /// </summary>
-        private static bool EndsWithAbbreviation(string text)
-        {
-            if (!text.EndsWith('.')) return false;
-
-            // Walk backward to find the last word before the period
-            int end = text.Length - 2; // skip the '.'
-            if (end < 0) return false;
-
-            int start = end;
-            while (start > 0 && char.IsLetter(text[start - 1]))
-                start--;
-
-            var lastWord = text[start..(end + 1)];
-            return _abbreviations.Contains(lastWord);
         }
 
         private static readonly Regex _dialogueAttribution = new(

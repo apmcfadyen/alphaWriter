@@ -62,6 +62,31 @@ namespace alphaWriter.Services.Nlp
             return results;
         }
 
+        public IReadOnlyList<(int Start, int Length, string Pos)>[] TagSpans(
+            IReadOnlyList<string> sentences)
+        {
+            if (!IsLoaded)
+                throw new InvalidOperationException(
+                    "Model not loaded. Call LoadAsync first.");
+
+            var results = new IReadOnlyList<(int Start, int Length, string Pos)>[sentences.Count];
+
+            for (int i = 0; i < sentences.Count; i++)
+            {
+                var doc = new Document(sentences[i], Language.English);
+                _pipeline!.ProcessSingle(doc);
+
+                var spans = new List<(int Start, int Length, string Pos)>();
+                foreach (var span in doc)
+                    foreach (var token in span)
+                        spans.Add((token.Begin, token.End - token.Begin + 1, token.POS.ToString()));
+
+                results[i] = spans;
+            }
+
+            return results;
+        }
+
         public void Dispose()
         {
             _pipeline = null;
