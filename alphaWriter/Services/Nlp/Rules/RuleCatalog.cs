@@ -158,6 +158,11 @@ namespace alphaWriter.Services.Nlp.Rules
             "Spellings, hyphenation, dashes and ellipses written more than one way. The book’s majority choice wins. One-click fix.",
             Copy, RuleTier.Book, RuleScope.Book);
 
+        public static readonly RuleDescriptor SignatureWords = new(
+            "style.signature-words", "Signature words",
+            "Words you use far more often than typical fiction (compared with 84 public-domain novels).",
+            Line, RuleTier.Book, RuleScope.Book);
+
         // ── Chapter comparisons ─────────────────────────────────────────────
 
         public static readonly RuleDescriptor SentenceLengthDrift = new(
@@ -263,7 +268,7 @@ namespace alphaWriter.Services.Nlp.Rules
             ClauseStacking, ClauseDensity, Passive, OpenerMonotony,
             PovSlip, FilterWords, DialogueTagPunctuation, DialogueTagVerbs, DialogueAdverbTags, TalkingHeads,
             Redundancy, Cliche, CrutchWords, NameSpelling, SimilarNames,
-            AmbiguousPronoun, TenseDrift, GestureTics, ConsistencySheet,
+            AmbiguousPronoun, TenseDrift, GestureTics, ConsistencySheet, SignatureWords,
             SentenceLengthDrift, VocabularyDrift, ReadabilityDrift, SceneOutlier, TopicDrift, ToneShift,
             SceneCount, ChapterLength, DialogueBalance, ContractionShift, SceneOpening, SceneClosing,
             FormalityDrift, VocabularyPlateau, ActPacing, EmotionalFlatline, DialogueDesert,

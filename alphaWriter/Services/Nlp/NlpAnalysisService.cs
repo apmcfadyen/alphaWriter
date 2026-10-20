@@ -239,11 +239,13 @@ namespace alphaWriter.Services.Nlp
                     }
 
                     // Book-level structural notes
+                    var reference = await ReferenceFrequencies.LoadDefaultAsync();
                     allNotes.AddRange(Engine.EvaluateBook(new BookRuleContext
                     {
                         Results = allResults,
                         Book = book,
-                        StyleSheet = book.StyleSheet ?? new EditorialStyleSheet()
+                        StyleSheet = book.StyleSheet ?? new EditorialStyleSheet(),
+                        Reference = reference
                     }));
 
                     // Character voice profiling + narrator drift

@@ -26,6 +26,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The bundled typical-fiction word table, for SignatureWordsTests -->
+    <None Include="..\alphaWriter\Resources\Raw\lexicons\fiction-frequencies.tsv"
+          Link="lexicons\fiction-frequencies.tsv"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\alphaWriter\alphaWriter.csproj">
       <!-- Prevent the main project's MAUI resizetizer build targets from
            flowing into the test project (avoids duplicate icon errors). -->

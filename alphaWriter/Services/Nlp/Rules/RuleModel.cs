@@ -114,7 +114,7 @@ namespace alphaWriter.Services.Nlp.Rules
             return map;
         }
 
-        internal static HashSet<string> BuildEntityWords(Book? book)
+        public static HashSet<string> BuildEntityWords(Book? book)
         {
             var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             if (book is null) return set;
@@ -141,6 +141,9 @@ namespace alphaWriter.Services.Nlp.Rules
         public required IReadOnlyList<SceneAnalysisResult> Results { get; init; }
         public Book? Book { get; init; }
         public EditorialStyleSheet StyleSheet { get; init; } = new();
+
+        /// <summary>Typical-fiction word frequencies, when the bundled table is available.</summary>
+        public ReferenceFrequencies? Reference { get; init; }
     }
 
     /// <summary>Helpers shared by rule implementations.</summary>

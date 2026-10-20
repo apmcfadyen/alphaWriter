@@ -64,6 +64,7 @@ namespace alphaWriter.Services.Nlp.Rules
             new SimilarNamesRule(),
             new GestureTicsBookRule(),
             new ConsistencySheetRule(),
+            new SignatureWordsRule(),
         ]);
 
         /// <summary>Tiers that can run for a document: POS rules need tagged tokens.</summary>
