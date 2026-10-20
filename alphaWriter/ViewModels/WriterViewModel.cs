@@ -284,6 +284,12 @@ namespace alphaWriter.ViewModels
             ActiveWorkspace = Workspace.Write;
             InsightsShowsReport = false;
             AttachOutline(value);
+            EndPass();
+            IsPassPickerVisible = false;
+            _currentNote = null;
+            _currentPosition = (-1, -1);
+            OnPropertyChanged(nameof(ProgressSummary));
+            OnPropertyChanged(nameof(HasProgressSummary));
             OnPropertyChanged(nameof(HasSelectedBook));
             OnPropertyChanged(nameof(CurrentBookTitle));
 
@@ -982,6 +988,8 @@ namespace alphaWriter.ViewModels
                 SelectedCategoryFilter = "All";
                 SelectedSeverityFilter = "All";
                 ApplyNoteFilters();
+                RecordAnalysisSnapshot();
+                if (IsPassPickerVisible) RebuildPassOptions();
                 AnalysisProgress = $"{AnalysisProgress} Found {NlpNotes.Count} note{(NlpNotes.Count == 1 ? "" : "s")}.";
                 AnnotationsChanged?.Invoke();
                 OnPropertyChanged(nameof(HasAnalysisResults));
@@ -1419,6 +1427,7 @@ namespace alphaWriter.ViewModels
         private void NavigateToNote(NlpNote note)
         {
             if (SelectedBook is null || string.IsNullOrEmpty(note.SceneId)) return;
+            TrackCurrentNote(note);
 
             foreach (var chapter in SelectedBook.Chapters)
             {

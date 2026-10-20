@@ -1468,12 +1468,13 @@ function navigateToNote(sceneId, sentenceIndex) {
             root.KeyboardAcceleratorPlacementMode =
                 Microsoft.UI.Xaml.Input.KeyboardAcceleratorPlacementMode.Hidden;
 
-            void Add(Windows.System.VirtualKey key, string shortcut)
+            void Add(Windows.System.VirtualKey key, string shortcut,
+                Windows.System.VirtualKeyModifiers modifiers = Windows.System.VirtualKeyModifiers.Control)
             {
                 var accelerator = new Microsoft.UI.Xaml.Input.KeyboardAccelerator
                 {
                     Key = key,
-                    Modifiers = Windows.System.VirtualKeyModifiers.Control
+                    Modifiers = modifiers
                 };
                 accelerator.Invoked += (_, args) => args.Handled = _viewModel.HandleShortcut(shortcut);
                 root.KeyboardAccelerators.Add(accelerator);
@@ -1485,6 +1486,8 @@ function navigateToNote(sceneId, sentenceIndex) {
             Add(Windows.System.VirtualKey.Number4, "4");
             Add(Windows.System.VirtualKey.Number5, "5");
             Add((Windows.System.VirtualKey)220, "sidebar");   // VK_OEM_5: the \ key
+            Add(Windows.System.VirtualKey.F8, "next", Windows.System.VirtualKeyModifiers.None);
+            Add(Windows.System.VirtualKey.F8, "prev", Windows.System.VirtualKeyModifiers.Shift);
 #endif
         }
 

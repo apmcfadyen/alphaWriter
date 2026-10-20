@@ -33,7 +33,7 @@ namespace alphaWriter.ViewModels
         [NotifyPropertyChangedFor(nameof(RuleSettingsToggleText))]
         private bool isRuleSettingsVisible;
 
-        public bool IsNotesListVisible => !IsRuleSettingsVisible;
+        public bool IsNotesListVisible => !IsRuleSettingsVisible && !IsPassPickerVisible;
 
         public string RuleSettingsToggleText => IsRuleSettingsVisible ? "← Back to notes" : "⚙ Settings";
 
@@ -82,6 +82,8 @@ namespace alphaWriter.ViewModels
         internal void RebuildReviseGroups()
         {
             var notes = NlpNotes.AsEnumerable();
+            if (IsPassActive)
+                notes = VisibleNotes.Where(n => n.RuleId == ActivePassRuleId);
             bool sceneOnly = ReviseScopeIsScene && SelectedScene is not null;
             if (sceneOnly)
                 notes = notes.Where(n => n.SceneId == SelectedScene!.Id);
@@ -102,6 +104,7 @@ namespace alphaWriter.ViewModels
 
             ReviseNoteGroups = new ObservableCollection<NoteGroup>(groups);
             OnPropertyChanged(nameof(ReviseSummary));
+            UpdatePassProgress();
 
             static IEnumerable<NlpNote> Order(IEnumerable<NlpNote> ns) => ns
                 .OrderBy(n => n.SentenceIndex ?? -1)
@@ -206,6 +209,7 @@ namespace alphaWriter.ViewModels
         {
             if (!IsRuleSettingsVisible) RefreshEditorialSettings();
             IsRuleSettingsVisible = !IsRuleSettingsVisible;
+            if (IsRuleSettingsVisible) IsPassPickerVisible = false;
         }
 
         [RelayCommand]
@@ -395,8 +399,10 @@ namespace alphaWriter.ViewModels
         {
             if (string.IsNullOrEmpty(sceneId)) return "null";
 
+            // During a pass, only that rule's marks: one kind of problem at a time
             var notes = VisibleNotes
                 .Where(n => n.SceneId == sceneId && !string.IsNullOrEmpty(n.AnchorText))
+                .Where(n => !IsPassActive || n.RuleId == ActivePassRuleId)
                 .ToList();
 
             var noteDtos = new List<object>();

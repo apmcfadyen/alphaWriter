@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Launches a Debug build of alphaWriter against a sandbox library, puts it into named UI
     states, and saves a PNG of the window at each requested size.
@@ -34,6 +34,8 @@ param(
         "revise-dev"     = "book=first;scene=The Fog Rolls In;scope=scene;workspace=Revise;filter=Developmental Editor"
         "insights"       = "book=first;insight=Problems;workspace=Insights"
         "insights-report"= "book=first;analyze=on;insight=report:NLP"
+        "revise-passes"  = "book=first;analyze=on;workspace=Revise;passes=on"
+        "revise-pass"    = "book=first;analyze=on;workspace=Revise;pass=style.show-dont-tell"
         "book"           = "book=first;workspace=Book"
     },
     [int] $StartupSeconds = 12,
