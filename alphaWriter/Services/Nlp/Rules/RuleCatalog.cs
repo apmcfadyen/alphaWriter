@@ -14,7 +14,7 @@ namespace alphaWriter.Services.Nlp.Rules
         /// Bump when scene-rule output changes, so cached per-scene results are recomputed
         /// instead of reused.
         /// </summary>
-        public const int EngineVersion = 1;
+        public const int EngineVersion = 3;
 
         private const NlpNoteCategory Copy = NlpNoteCategory.CopyEditor;
         private const NlpNoteCategory Line = NlpNoteCategory.LineEditor;
@@ -76,6 +76,92 @@ namespace alphaWriter.Services.Nlp.Rules
             "style.opener-monotony", "Repetitive sentence openers",
             "Scenes where most sentences open with the same kind of word.",
             Line, RuleTier.Pos, RuleScope.Scene);
+
+        // ── Viewpoint & dialogue (Phase 1) ──────────────────────────────────
+
+        public static readonly RuleDescriptor PovSlip = new(
+            "pov.head-hop", "Head-hopping",
+            "In a single-viewpoint scene, narration that reports another character’s private thoughts or feelings.",
+            Line, RuleTier.Lexical, RuleScope.Scene);
+
+        public static readonly RuleDescriptor FilterWords = new(
+            "style.filter-words", "Filter words",
+            "“She saw / heard / noticed” putting the character between the reader and the moment.",
+            Line, RuleTier.Lexical, RuleScope.Scene);
+
+        public static readonly RuleDescriptor DialogueTagPunctuation = new(
+            "dialogue.tag-punctuation", "Dialogue tag punctuation",
+            "A period before a dialogue tag, or a capitalized pronoun starting the tag. One-click fix.",
+            Copy, RuleTier.Lexical, RuleScope.Scene);
+
+        public static readonly RuleDescriptor DialogueTagVerbs = new(
+            "dialogue.tag-verbs", "Showy or impossible tags",
+            "Said-bookisms (“retorted”, “opined”) and actions used as tags (“she smiled”). One-click fix.",
+            Line, RuleTier.Lexical, RuleScope.Scene);
+
+        public static readonly RuleDescriptor DialogueAdverbTags = new(
+            "dialogue.adverb-tags", "Adverbs on dialogue tags",
+            "“Said angrily”: an adverb explaining a line instead of the line showing it.",
+            Line, RuleTier.Lexical, RuleScope.Scene);
+
+        public static readonly RuleDescriptor TalkingHeads = new(
+            "dialogue.talking-heads", "Who’s speaking?",
+            "Long runs of dialogue with no tags or action beats, where readers lose track of the speaker.",
+            Line, RuleTier.Lexical, RuleScope.Scene);
+
+        // ── Wordiness & consistency (Phase 1) ───────────────────────────────
+
+        public static readonly RuleDescriptor Redundancy = new(
+            "style.redundancy", "Redundant and weak phrasing",
+            "“Nodded his head”, “made a decision”: words that say the same thing twice or hide the verb. One-click fix.",
+            Copy, RuleTier.Lexical, RuleScope.Scene);
+
+        public static readonly RuleDescriptor Cliche = new(
+            "style.cliche", "Clichés",
+            "Stock phrases readers have seen so often they no longer feel them.",
+            Line, RuleTier.Lexical, RuleScope.Scene);
+
+        public static readonly RuleDescriptor CrutchWords = new(
+            "style.crutch-words", "Crutch words",
+            "“Just”, “really”, “began to” and friends piling up within a scene.",
+            Copy, RuleTier.Lexical, RuleScope.Scene);
+
+        public static readonly RuleDescriptor NameSpelling = new(
+            "consistency.name-spelling", "Name misspellings",
+            "Words that look like a misspelled character, place or item name from your Story Bible. One-click fix.",
+            Copy, RuleTier.Lexical, RuleScope.Scene);
+
+        public static readonly RuleDescriptor SimilarNames = new(
+            "consistency.similar-names", "Look-alike names",
+            "Cast names so similar that readers may confuse them.",
+            Dev, RuleTier.Book, RuleScope.Book);
+
+        // ── Reference, tense & consistency (Phase 1, batch 2) ───────────────
+
+        public static readonly RuleDescriptor AmbiguousPronoun = new(
+            "style.ambiguous-pronoun", "Ambiguous pronouns",
+            "A he/she that could refer to two characters named just before it. Uses each character’s pronouns from the Story Bible, or a guess from the text.",
+            Line, RuleTier.Lexical, RuleScope.Scene);
+
+        public static readonly RuleDescriptor TenseDrift = new(
+            "style.tense-drift", "Tense drift",
+            "Narration slipping between past and present tense within a scene.",
+            Line, RuleTier.Lexical, RuleScope.Scene);
+
+        public static readonly RuleDescriptor GestureTics = new(
+            "style.gesture-tics", "Gesture tics",
+            "Nods, shrugs, sighs and other beats repeated within a scene, or across the book by the same characters.",
+            Line, RuleTier.Lexical, RuleScope.Scene);
+
+        public static readonly RuleDescriptor ConsistencySheet = new(
+            "consistency.style-sheet", "Consistency sheet",
+            "Spellings, hyphenation, dashes and ellipses written more than one way. The book’s majority choice wins. One-click fix.",
+            Copy, RuleTier.Book, RuleScope.Book);
+
+        public static readonly RuleDescriptor SignatureWords = new(
+            "style.signature-words", "Signature words",
+            "Words you use far more often than typical fiction (compared with 84 public-domain novels).",
+            Line, RuleTier.Book, RuleScope.Book);
 
         // ── Chapter comparisons ─────────────────────────────────────────────
 
@@ -180,6 +266,9 @@ namespace alphaWriter.Services.Nlp.Rules
         [
             LongSentence, SceneLength, NarrationRun, Adverbs, AdverbDensity, ShowDontTell, Echo,
             ClauseStacking, ClauseDensity, Passive, OpenerMonotony,
+            PovSlip, FilterWords, DialogueTagPunctuation, DialogueTagVerbs, DialogueAdverbTags, TalkingHeads,
+            Redundancy, Cliche, CrutchWords, NameSpelling, SimilarNames,
+            AmbiguousPronoun, TenseDrift, GestureTics, ConsistencySheet, SignatureWords,
             SentenceLengthDrift, VocabularyDrift, ReadabilityDrift, SceneOutlier, TopicDrift, ToneShift,
             SceneCount, ChapterLength, DialogueBalance, ContractionShift, SceneOpening, SceneClosing,
             FormalityDrift, VocabularyPlateau, ActPacing, EmotionalFlatline, DialogueDesert,

@@ -49,13 +49,13 @@
             </Border>
             <Border Style="{StaticResource InsightItem}"
                     BackgroundColor="{Binding ActiveInsight, Converter={StaticResource SelectedTabConverter}, ConverterParameter='Problems;row'}"
-                    SemanticProperties.Description="Problem words">
+                    SemanticProperties.Description="Signature words">
                 <Border.GestureRecognizers>
                     <TapGestureRecognizer Command="{Binding OpenInsightCommand}" CommandParameter="Problems" />
                 </Border.GestureRecognizers>
                 <VerticalStackLayout>
-                    <Label Text="Problem words" Style="{StaticResource InsightTitle}" />
-                    <Label Text="Words used more than 0.5% of the time." Style="{StaticResource InsightHint}" />
+                    <Label Text="Signature words" Style="{StaticResource InsightTitle}" />
+                    <Label Text="Words you use far more than typical fiction." Style="{StaticResource InsightHint}" />
                 </VerticalStackLayout>
             </Border>
             <Border Style="{StaticResource InsightItem}"

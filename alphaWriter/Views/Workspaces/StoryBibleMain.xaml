@@ -55,6 +55,18 @@
                            Placeholder="Full name"
                            Unfocused="OnElementFieldUnfocused" />
 
+                    <Label Text="Pronouns" Style="{StaticResource FieldLabel}" />
+                    <Picker ItemsSource="{Binding PronounOptions}"
+                            SelectedItem="{Binding SelectedCharacterPronouns}"
+                            TextColor="{StaticResource TextPrimary}"
+                            FontSize="14"
+                            ToolTipProperties.Text="Lets the editor work out who “he” and “she” refer to" />
+                    <Label Text="{Binding SelectedCharacterPronounHint}"
+                           IsVisible="{Binding SelectedCharacterPronounHint, Converter={StaticResource IsNotNullOrEmptyConverter}}"
+                           TextColor="{StaticResource TextSecondary}"
+                           FontSize="11"
+                           LineBreakMode="WordWrap" />
+
                     <Label Text="Description" Style="{StaticResource FieldLabel}" />
                     <Editor Text="{Binding SelectedCharacter.Description}"
                             Style="{StaticResource ElementFieldEditor}"

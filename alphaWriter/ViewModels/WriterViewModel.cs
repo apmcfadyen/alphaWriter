@@ -255,6 +255,7 @@ namespace alphaWriter.ViewModels
             if (_initialized) return;
             _initialized = true;
 
+            _ = Services.Nlp.Rules.ReferenceFrequencies.LoadDefaultAsync(); // for Insights › Signature words
             var loaded = await _bookService.LoadBooksAsync();
             Books = new ObservableCollection<Book>(loaded);
 
@@ -380,6 +381,7 @@ namespace alphaWriter.ViewModels
                 ActiveWorkspace = Workspace.StoryBible;
             }
             NotifyElementSelectionDerived();
+            NotifyPronounsChanged();
         }
 
         partial void OnSelectedLocationChanged(Location? value)
@@ -960,6 +962,8 @@ namespace alphaWriter.ViewModels
             {
                 var progress = new Progress<string>(msg => AnalysisProgress = msg);
                 // Unchanged scenes from the previous run are reused rather than re-analyzed
+                // Re-guess pronouns from the current text before rules use them
+                Services.Nlp.Rules.PronounInference.Invalidate(SelectedBook);
                 var (notes, results, profiles, dialogueProfiles) = await _nlpAnalysisService.AnalyzeBookAsync(
                     SelectedBook, progress, ct, _analysisResults);
                 _analysisResults = results;
@@ -1761,6 +1765,10 @@ namespace alphaWriter.ViewModels
             "which","who","what","there","all","said","s","t","re","ll","ve","m","d"
         };
 
+        /// <summary>Explains the Signature / Problem words list in Insights.</summary>
+        public string ProblemWordsCaption { get; private set; } =
+            "Words appearing >0.5% of total, >3 times, excluding stopwords";
+
         private void ComputeStatistics()
         {
             if (SelectedBook is null) return;
@@ -1802,7 +1810,31 @@ namespace alphaWriter.ViewModels
             foreach (var e in freqList) e.ProgressValue = e.Count / freqMax;
             WordFrequencyData = new ObservableCollection<WordFrequencyEntry>(freqList);
 
-            // ── Problem words (non-stopwords appearing > 0.5% and > 3 times) ─
+            // ── Signature words (vs typical fiction), or problem words without the table ─
+            var reference = Services.Nlp.Rules.ReferenceFrequencies.Default;
+            if (reference is null)
+                _ = Services.Nlp.Rules.ReferenceFrequencies.LoadDefaultAsync().ContinueWith(t =>
+                {
+                    if (t.Result is not null) MainThread.BeginInvokeOnMainThread(ComputeStatistics);
+                });
+            if (reference is not null)
+            {
+                var excluded = Services.Nlp.Rules.SceneRuleContext.BuildEntityWords(SelectedBook);
+                foreach (var allowed in SelectedBook.StyleSheet.AllowedWords) excluded.Add(allowed.ToLowerInvariant());
+                ProblemWordsData = new ObservableCollection<WordFrequencyEntry>(
+                    Services.Nlp.Rules.SignatureWords.Find(allWords, reference, excluded, max: 40)
+                        .Select(s => new WordFrequencyEntry
+                        {
+                            Word = s.Word,
+                            Count = s.Count,
+                            Percentage = s.Ratio,
+                            Detail = $"{s.Ratio:0.#}× typical"
+                        }));
+                ProblemWordsCaption = "Words you use far more often than typical fiction (84 public-domain novels). " +
+                                      "Some are your voice; others are habits. Character names and allowed words are left out.";
+                OnPropertyChanged(nameof(ProblemWordsCaption));
+            }
+            else
             ProblemWordsData = new ObservableCollection<WordFrequencyEntry>(
                 allWords.GroupBy(w => w)
                     .Where(g => !_stopwords.Contains(g.Key)
@@ -1815,7 +1847,8 @@ namespace alphaWriter.ViewModels
                     {
                         Word       = g.Key,
                         Count      = g.Count(),
-                        Percentage = total > 0 ? (double)g.Count() / total * 100 : 0
+                        Percentage = total > 0 ? (double)g.Count() / total * 100 : 0,
+                        Detail     = total > 0 ? $"{(double)g.Count() / total * 100:F1}%" : ""
                     }));
 
             // ── Words per character ────────────────────────────────────────

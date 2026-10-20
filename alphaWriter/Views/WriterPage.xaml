@@ -300,7 +300,8 @@
 
                     <!-- Problem words tab -->
                     <Grid IsVisible="{Binding IsProblemsTab}" RowDefinitions="Auto,*">
-                    <Label Text="Words appearing &gt;0.5% of total, &gt;3 times, excluding stopwords"
+                    <Label Text="{Binding ProblemWordsCaption}"
+                           LineBreakMode="WordWrap"
                            TextColor="{StaticResource TextSecondary}"
                            FontSize="11" FontAttributes="Italic"
                            Margin="12,8,12,4" />
@@ -310,10 +311,10 @@
                                     Margin="8,4">
                         <CollectionView.ItemTemplate>
                             <DataTemplate x:DataType="vm:WordFrequencyEntry">
-                                <Grid ColumnDefinitions="120,40,60" Padding="4,2" ColumnSpacing="8">
+                                <Grid ColumnDefinitions="160,60,120" Padding="4,2" ColumnSpacing="12">
                                     <Label Grid.Column="0"
                                            Text="{Binding Word}"
-                                           TextColor="{StaticResource AccentDanger}"
+                                           TextColor="{StaticResource TextAccent}"
                                            FontSize="13"
                                            LineBreakMode="TailTruncation" />
                                     <Label Grid.Column="1"
@@ -322,14 +323,15 @@
                                            FontSize="12"
                                            HorizontalOptions="End" />
                                     <Label Grid.Column="2"
-                                           Text="{Binding Percentage, StringFormat='{0:F1}%'}"
-                                           TextColor="{StaticResource TextDisabled}"
+                                           Text="{Binding Detail}"
+                                           TextColor="{StaticResource TextSecondary}"
                                            FontSize="12" />
                                 </Grid>
                             </DataTemplate>
                         </CollectionView.ItemTemplate>
                         <CollectionView.EmptyView>
-                            <Label Text="No problem words detected."
+                            <Label Text="Nothing stands out yet. Signature words need a few thousand words of prose before the comparison means anything."
+                                   LineBreakMode="WordWrap"
                                    TextColor="{StaticResource TextDisabled}"
                                    FontSize="13" FontAttributes="Italic"
                                    HorizontalOptions="Center"
