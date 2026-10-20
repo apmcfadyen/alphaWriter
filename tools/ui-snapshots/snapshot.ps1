@@ -30,6 +30,8 @@ param(
         "storybible"     = "book=first;character=Eleonora;workspace=StoryBible"
         "revise"         = "book=first;scene=The Fog Rolls In;scope=scene;workspace=Revise"
         "revise-settings"= "book=first;settings=on;workspace=Revise"
+        "revise-station" = "book=first;scene=The Station at a Quarter Past Four;scope=scene;workspace=Revise"
+        "revise-dev"     = "book=first;scene=The Fog Rolls In;scope=scene;workspace=Revise;filter=Developmental Editor"
         "insights"       = "book=first;insight=Problems;workspace=Insights"
         "book"           = "book=first;workspace=Book"
     },

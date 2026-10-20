@@ -232,8 +232,14 @@ namespace alphaWriter.ViewModels
         /// Actions: dismiss, disable-scene, disable-rule, allow-word.
         /// </summary>
         public void ApplyNoteAction(string action, string? fingerprint, string? ruleId,
-            string? sceneId, string? word)
+            string? sceneId, string? word, string? value = null)
         {
+            if (action == "fix" && !string.IsNullOrEmpty(value))
+            {
+                ApplyFixAction(value, sceneId);
+                return;
+            }
+
             var sheet = StyleSheet;
             if (sheet is null) return;
 
@@ -258,6 +264,45 @@ namespace alphaWriter.ViewModels
 
             OnEditorialPreferencesChanged();
             if (IsRuleSettingsVisible) RefreshEditorialSettings();
+        }
+
+        /// <summary>Runs a note's <see cref="NlpNote.FixAction"/> from a note card.</summary>
+        [RelayCommand]
+        private void ApplyNoteFix(NlpNote? note)
+        {
+            if (note is null || !note.HasFixAction) return;
+            ApplyFixAction(note.FixAction, note.SceneId);
+        }
+
+        /// <summary>
+        /// Non-text fixes: "tag-character:&lt;id&gt;" / "untag-character:&lt;id&gt;" add or
+        /// remove a character from the scene's cast. The scene is re-checked right away,
+        /// so the note disappears once it no longer applies.
+        /// </summary>
+        internal void ApplyFixAction(string fixAction, string? sceneId)
+        {
+            var parts = fixAction.Split(':', 2);
+            if (parts.Length != 2 || SelectedBook is null || string.IsNullOrEmpty(sceneId)) return;
+            var scene = SelectedBook.Chapters.SelectMany(c => c.Scenes).FirstOrDefault(s => s.Id == sceneId);
+            if (scene is null) return;
+
+            switch (parts[0])
+            {
+                case "tag-character" when !scene.CharacterIds.Contains(parts[1]):
+                    scene.CharacterIds.Add(parts[1]);
+                    scene.UntaggedIds.Remove(parts[1]);
+                    break;
+                case "untag-character":
+                    scene.CharacterIds.Remove(parts[1]);
+                    if (!scene.UntaggedIds.Contains(parts[1])) scene.UntaggedIds.Add(parts[1]);   // stays untagged
+                    break;
+                default:
+                    return;
+            }
+
+            if (SelectedScene == scene) RebuildSceneEntityOptions();
+            DebouncedSave();
+            ScheduleLiveAnalysis(scene, 0);
         }
 
         private void OnEditorialPreferencesChanged()
@@ -377,6 +422,8 @@ namespace alphaWriter.ViewModels
                     evidence = n.Evidence,
                     fingerprint = n.Fingerprint,
                     suggestions = n.Suggestions,
+                    fixAction = n.FixAction,
+                    fixActionLabel = n.FixActionLabel,
                     canAllowWord = !string.IsNullOrEmpty(n.Evidence) && !n.Evidence.Contains(' ')
                 });
 

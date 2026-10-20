@@ -836,16 +836,19 @@ namespace alphaWriter.ViewModels
 
             foreach (var c in SelectedBook.Characters)
                 if (IsEntityDetectedInContent(content, c.Name, c.Aka)
+                    && !SelectedScene.UntaggedIds.Contains(c.Id)
                     && !SelectedScene.CharacterIds.Contains(c.Id))
                     SelectedScene.CharacterIds.Add(c.Id);
 
             foreach (var l in SelectedBook.Locations)
                 if (IsEntityDetectedInContent(content, l.Name, l.Aka)
+                    && !SelectedScene.UntaggedIds.Contains(l.Id)
                     && !SelectedScene.LocationIds.Contains(l.Id))
                     SelectedScene.LocationIds.Add(l.Id);
 
             foreach (var i in SelectedBook.Items)
                 if (IsEntityDetectedInContent(content, i.Name, i.Aka)
+                    && !SelectedScene.UntaggedIds.Contains(i.Id)
                     && !SelectedScene.ItemIds.Contains(i.Id))
                     SelectedScene.ItemIds.Add(i.Id);
         }
@@ -882,6 +885,12 @@ namespace alphaWriter.ViewModels
         {
             if (_suppressEntitySync
                 || e.PropertyName != nameof(SceneEntityOption.IsSelected)) return;
+            // Unticking is remembered so auto-detection doesn't re-add the entity
+            if (sender is SceneEntityOption option && SelectedScene is not null)
+            {
+                SelectedScene.UntaggedIds.Remove(option.Id);
+                if (!option.IsSelected) SelectedScene.UntaggedIds.Add(option.Id);
+            }
             SyncSceneEntitiesToScene();
             TriggerSaveAsync().ConfigureAwait(false);
         }
@@ -1603,16 +1612,19 @@ namespace alphaWriter.ViewModels
             {
                 foreach (var c in SelectedBook.Characters)
                     if (IsEntityDetectedInContent(scene.Content, c.Name, c.Aka)
+                        && !scene.UntaggedIds.Contains(c.Id)
                         && !scene.CharacterIds.Contains(c.Id))
                         scene.CharacterIds.Add(c.Id);
 
                 foreach (var l in SelectedBook.Locations)
                     if (IsEntityDetectedInContent(scene.Content, l.Name, l.Aka)
+                        && !scene.UntaggedIds.Contains(l.Id)
                         && !scene.LocationIds.Contains(l.Id))
                         scene.LocationIds.Add(l.Id);
 
                 foreach (var i in SelectedBook.Items)
                     if (IsEntityDetectedInContent(scene.Content, i.Name, i.Aka)
+                        && !scene.UntaggedIds.Contains(i.Id)
                         && !scene.ItemIds.Contains(i.Id))
                         scene.ItemIds.Add(i.Id);
             }

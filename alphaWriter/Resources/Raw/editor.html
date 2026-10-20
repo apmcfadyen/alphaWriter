@@ -702,6 +702,11 @@
       html += '</div>';
     }
 
+    if (note.fixAction) {
+      html += '<div class="aw-sugg"><button data-act="fix" title="Apply this fix">'
+            + escapeHtml(note.fixActionLabel || 'Fix') + '</button></div>';
+    }
+
     html += '<div class="aw-actions">'
           + '<button data-act="dismiss" title="Hide this note">Ignore</button>'
           + '<button data-act="disable-scene" title="Stop flagging this rule in the current scene">Off in scene</button>'
@@ -762,6 +767,7 @@
       + '&fp=' + encodeURIComponent(note.fingerprint || '')
       + '&rule=' + encodeURIComponent(note.ruleId || '')
       + '&word=' + encodeURIComponent(act === 'allow-word' ? (note.evidence || '') : '')
+      + '&value=' + encodeURIComponent(act === 'fix' ? (note.fixAction || '') : '')
       + '&t=' + Date.now();
     retireNote(note);
   });

@@ -50,6 +50,9 @@ namespace alphaWriter.ViewModels
                     case "insight":
                         OpenInsight(value);
                         break;
+                    case "filter":
+                        SelectedCategoryFilter = value;
+                        break;
                     case "scope":
                         ReviseScopeIsScene = value == "scene";
                         break;

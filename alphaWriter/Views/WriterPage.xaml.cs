@@ -182,7 +182,8 @@ namespace alphaWriter.Views
                     ExtractQueryParam(e.Url, "fp"),
                     ExtractQueryParam(e.Url, "rule"),
                     _currentEditorScene?.Id,
-                    ExtractQueryParam(e.Url, "word"));
+                    ExtractQueryParam(e.Url, "word"),
+                    ExtractQueryParam(e.Url, "value"));
             }
             else if (e.Url.StartsWith("alphawriter://entityClicked", StringComparison.OrdinalIgnoreCase))
             {

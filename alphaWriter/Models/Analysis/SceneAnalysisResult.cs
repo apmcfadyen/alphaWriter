@@ -13,6 +13,12 @@ namespace alphaWriter.Models.Analysis
         public List<SentenceAnalysis> Sentences { get; set; } = [];
         public List<NlpNote> Notes { get; set; } = [];
 
+        /// <summary>
+        /// What each paragraph is mostly doing ("Dialogue", "Action", "Interiority",
+        /// "Description", "Exposition"), in order: the scene's shape at a glance.
+        /// </summary>
+        public List<string> ParagraphBeats { get; set; } = [];
+
         // Populated in Phase 2 (embedding-based)
         public float ChapterSimilarity { get; set; }
 
