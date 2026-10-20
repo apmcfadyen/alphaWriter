@@ -73,8 +73,46 @@ namespace alphaWriter.Services.Nlp.Rules
         /// </summary>
         public HashSet<string> EntityWords => _entityWords ??= BuildEntityWords(Book);
 
+        private Dictionary<string, Character>? _characterWords;
+
+        /// <summary>
+        /// Lowercased name/alias word → character, for words that belong to exactly one
+        /// character ("maya", "lindqvist", "tom"). Shared words are left out as ambiguous.
+        /// </summary>
+        public IReadOnlyDictionary<string, Character> CharacterWords => _characterWords ??= BuildCharacterWords(Book);
+
+        /// <summary>The scene's viewpoint character when there is exactly one; otherwise null.</summary>
+        public Character? SingleViewpoint =>
+            ViewpointCharacterIds.Count == 1
+                ? Book?.Characters.FirstOrDefault(c => c.Id == ViewpointCharacterIds[0])
+                : null;
+
         public double Threshold(string ruleId, string setting, double defaultValue) =>
             StyleSheet.GetThreshold(ruleId, setting, defaultValue);
+
+        private static Dictionary<string, Character> BuildCharacterWords(Book? book)
+        {
+            var map = new Dictionary<string, Character>(StringComparer.OrdinalIgnoreCase);
+            var shared = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (book is null) return map;
+
+            foreach (var c in book.Characters)
+            {
+                foreach (var name in new[] { c.Name, c.FullName, c.Aka })
+                {
+                    if (string.IsNullOrWhiteSpace(name)) continue;
+                    foreach (var part in name.Split([',', ';', ' ', '\t'], StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        var word = part.Trim().Trim('"', '\'');
+                        if (word.Length < 2 || !char.IsUpper(word[0])) continue; // "the" in "the harbourmaster's daughter"
+                        if (map.TryGetValue(word, out var other) && other != c) shared.Add(word);
+                        else map[word] = c;
+                    }
+                }
+            }
+            foreach (var word in shared) map.Remove(word);
+            return map;
+        }
 
         internal static HashSet<string> BuildEntityWords(Book? book)
         {
@@ -140,6 +178,13 @@ namespace alphaWriter.Services.Nlp.Rules
             note.Start = sentence.Start;
             note.Length = sentence.Length;
             note.SentenceIndex = sentence.Index;
+            return note;
+        }
+
+        /// <summary>Adds a one-click replacement for the note's primary span.</summary>
+        public static NlpNote WithSuggestion(this NlpNote note, string replacement)
+        {
+            note.Suggestions.Add(replacement);
             return note;
         }
 

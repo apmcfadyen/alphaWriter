@@ -53,6 +53,10 @@ LEDGER = paragraphs(
     "\"In the customs house,\" Maya said. \"Behind the stove. Somebody wanted it found.\"",
     "He turned the page. The handwriting changed halfway down, as if someone else had taken over the "
     "lie. She was nervous, and she hated that he could see it.",
+    # Phase 1 triggers: capitalised tag, action tag, head-hop, redundancy, misspelt name
+    '"Really?" She asked.',
+    "\"It's nothing,\" Tomas smiled. Tomas knew she didn't believe him.",
+    "Maya nodded her head and made a decision. She would show Thomas the ledger tomorrow.",
 )
 
 STORM_OUTLINE = paragraphs(
