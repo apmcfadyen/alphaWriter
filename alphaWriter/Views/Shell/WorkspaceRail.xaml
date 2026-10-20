@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+    Always-visible workspace switcher. The active workspace has an accent bar and a
+    raised background, so the author always knows which job they are doing.
+    Books (switch / manage) sit at the bottom.
+-->
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="alphaWriter.Views.Shell.WorkspaceRail">
+
+    <ContentView.Resources>
+        <Style x:Key="RailGlyph" TargetType="Label">
+            <Setter Property="FontSize" Value="18" />
+            <Setter Property="HorizontalTextAlignment" Value="Center" />
+            <Setter Property="InputTransparent" Value="True" />
+        </Style>
+        <Style x:Key="RailText" TargetType="Label">
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="HorizontalTextAlignment" Value="Center" />
+            <Setter Property="LineBreakMode" Value="WordWrap" />
+            <Setter Property="InputTransparent" Value="True" />
+        </Style>
+        <Style x:Key="RailItem" TargetType="Grid">
+            <Setter Property="ColumnDefinitions" Value="3,*" />
+            <Setter Property="Padding" Value="0,6" />
+            <Setter Property="Margin" Value="0,1" />
+        </Style>
+    </ContentView.Resources>
+
+    <Grid RowDefinitions="*,Auto"
+          WidthRequest="64"
+          BackgroundColor="{StaticResource SurfaceDeep}">
+
+        <VerticalStackLayout Grid.Row="0" Spacing="2" Padding="0,8,0,0">
+
+            <!-- Write -->
+            <Grid Style="{StaticResource RailItem}"
+                  BackgroundColor="{Binding ActiveWorkspace, Converter={StaticResource SelectedTabConverter}, ConverterParameter='Write;row'}"
+                  ToolTipProperties.Text="Write — outline, editor and scene details (Ctrl+1)"
+                  SemanticProperties.Description="Write workspace">
+                <Grid.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding SetWorkspaceCommand}" CommandParameter="Write" />
+                </Grid.GestureRecognizers>
+                <BoxView Grid.Column="0" Color="{StaticResource AccentHover}" IsVisible="{Binding IsWriteWorkspace}" />
+                <VerticalStackLayout Grid.Column="1" Spacing="1">
+                    <Label Text="✎" Style="{StaticResource RailGlyph}"
+                           TextColor="{Binding IsWriteWorkspace, Converter={StaticResource SelectedTabConverter}, ConverterParameter=text}" />
+                    <Label Text="Write" Style="{StaticResource RailText}"
+                           TextColor="{Binding IsWriteWorkspace, Converter={StaticResource SelectedTabConverter}, ConverterParameter=text}" />
+                </VerticalStackLayout>
+            </Grid>
+
+            <!-- Story Bible -->
+            <Grid Style="{StaticResource RailItem}"
+                  BackgroundColor="{Binding ActiveWorkspace, Converter={StaticResource SelectedTabConverter}, ConverterParameter='StoryBible;row'}"
+                  ToolTipProperties.Text="Story Bible — characters, places and items (Ctrl+2)"
+                  SemanticProperties.Description="Story Bible workspace">
+                <Grid.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding SetWorkspaceCommand}" CommandParameter="StoryBible" />
+                </Grid.GestureRecognizers>
+                <BoxView Grid.Column="0" Color="{StaticResource AccentHover}" IsVisible="{Binding IsStoryBibleWorkspace}" />
+                <VerticalStackLayout Grid.Column="1" Spacing="1">
+                    <Label Text="✦" Style="{StaticResource RailGlyph}"
+                           TextColor="{Binding IsStoryBibleWorkspace, Converter={StaticResource SelectedTabConverter}, ConverterParameter=text}" />
+                    <Label Text="Story Bible" Style="{StaticResource RailText}"
+                           TextColor="{Binding IsStoryBibleWorkspace, Converter={StaticResource SelectedTabConverter}, ConverterParameter=text}" />
+                </VerticalStackLayout>
+            </Grid>
+
+            <!-- Revise -->
+            <Grid Style="{StaticResource RailItem}"
+                  BackgroundColor="{Binding ActiveWorkspace, Converter={StaticResource SelectedTabConverter}, ConverterParameter='Revise;row'}"
+                  ToolTipProperties.Text="Revise — editorial analysis and notes (Ctrl+3)"
+                  SemanticProperties.Description="Revise workspace">
+                <Grid.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding SetWorkspaceCommand}" CommandParameter="Revise" />
+                </Grid.GestureRecognizers>
+                <BoxView Grid.Column="0" Color="{StaticResource AccentHover}" IsVisible="{Binding IsReviseWorkspace}" />
+                <VerticalStackLayout Grid.Column="1" Spacing="1">
+                    <Label Text="✓" Style="{StaticResource RailGlyph}"
+                           TextColor="{Binding IsReviseWorkspace, Converter={StaticResource SelectedTabConverter}, ConverterParameter=text}" />
+                    <Label Text="Revise" Style="{StaticResource RailText}"
+                           TextColor="{Binding IsReviseWorkspace, Converter={StaticResource SelectedTabConverter}, ConverterParameter=text}" />
+                </VerticalStackLayout>
+            </Grid>
+
+            <!-- Insights -->
+            <Grid Style="{StaticResource RailItem}"
+                  BackgroundColor="{Binding ActiveWorkspace, Converter={StaticResource SelectedTabConverter}, ConverterParameter='Insights;row'}"
+                  ToolTipProperties.Text="Insights — statistics and reports (Ctrl+4)"
+                  SemanticProperties.Description="Insights workspace">
+                <Grid.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding SetWorkspaceCommand}" CommandParameter="Insights" />
+                </Grid.GestureRecognizers>
+                <BoxView Grid.Column="0" Color="{StaticResource AccentHover}" IsVisible="{Binding IsInsightsWorkspace}" />
+                <VerticalStackLayout Grid.Column="1" Spacing="1">
+                    <Label Text="▦" Style="{StaticResource RailGlyph}"
+                           TextColor="{Binding IsInsightsWorkspace, Converter={StaticResource SelectedTabConverter}, ConverterParameter=text}" />
+                    <Label Text="Insights" Style="{StaticResource RailText}"
+                           TextColor="{Binding IsInsightsWorkspace, Converter={StaticResource SelectedTabConverter}, ConverterParameter=text}" />
+                </VerticalStackLayout>
+            </Grid>
+
+            <!-- Book -->
+            <Grid Style="{StaticResource RailItem}"
+                  BackgroundColor="{Binding ActiveWorkspace, Converter={StaticResource SelectedTabConverter}, ConverterParameter='Book;row'}"
+                  ToolTipProperties.Text="Book — title, author, synopsis and word target (Ctrl+5)"
+                  SemanticProperties.Description="Book workspace">
+                <Grid.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding SetWorkspaceCommand}" CommandParameter="Book" />
+                </Grid.GestureRecognizers>
+                <BoxView Grid.Column="0" Color="{StaticResource AccentHover}" IsVisible="{Binding IsBookWorkspace}" />
+                <VerticalStackLayout Grid.Column="1" Spacing="1">
+                    <Label Text="ⓘ" Style="{StaticResource RailGlyph}"
+                           TextColor="{Binding IsBookWorkspace, Converter={StaticResource SelectedTabConverter}, ConverterParameter=text}" />
+                    <Label Text="Book" Style="{StaticResource RailText}"
+                           TextColor="{Binding IsBookWorkspace, Converter={StaticResource SelectedTabConverter}, ConverterParameter=text}" />
+                </VerticalStackLayout>
+            </Grid>
+        </VerticalStackLayout>
+
+        <!-- Books: switch and manage -->
+        <VerticalStackLayout Grid.Row="1" Spacing="2" Padding="0,0,0,8">
+            <BoxView HeightRequest="1" Color="{StaticResource BorderSubtle}" Margin="10,0,10,6" />
+            <Grid Style="{StaticResource RailItem}"
+                  ToolTipProperties.Text="{Binding CurrentBookTitle, StringFormat='Open book: {0}. Click to switch books.'}"
+                  SemanticProperties.Description="Switch book">
+                <Grid.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding SwitchBookCommand}" />
+                </Grid.GestureRecognizers>
+                <VerticalStackLayout Grid.Column="1" Spacing="1">
+                    <Label Text="⇄" Style="{StaticResource RailGlyph}" TextColor="{StaticResource TextSecondary}" />
+                    <Label Text="Books" Style="{StaticResource RailText}" TextColor="{StaticResource TextSecondary}" />
+                </VerticalStackLayout>
+            </Grid>
+            <Button Text="⋯"
+                    Style="{StaticResource IconButton}"
+                    HorizontalOptions="Center"
+                    Command="{Binding ManageBooksCommand}"
+                    ToolTipProperties.Text="Manage books (new, rename, delete)"
+                    SemanticProperties.Description="Manage books" />
+        </VerticalStackLayout>
+    </Grid>
+</ContentView>

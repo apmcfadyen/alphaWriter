@@ -17,6 +17,7 @@
             <converters:IsNotNullOrEmptyConverter x:Key="IsNotNullOrEmptyConverter" />
             <converters:IsNotZeroConverter x:Key="IsNotZeroConverter" />
             <converters:IsNotSceneConverter x:Key="IsNotSceneConverter" />
+            <converters:SelectedTabConverter x:Key="SelectedTabConverter" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

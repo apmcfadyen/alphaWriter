@@ -12,9 +12,20 @@ namespace alphaWriter.Services.Nlp
     {
         private readonly string _cacheDir;
 
+        /// <summary>Bumped whenever persisted analysis changes shape (spans, rule ids).</summary>
+        public const int AnalysisFormatVersion = 2;
+
+        // IncludeFields: per-sentence emotions are (Label, Confidence) value tuples,
+        // whose members are fields — without this they persist as empty objects.
+        private static readonly JsonSerializerOptions AnalysisJsonOptions = new()
+        {
+            WriteIndented = true,
+            IncludeFields = true
+        };
+
         public NlpCacheService()
         {
-            _cacheDir = Path.Combine(FileSystem.AppDataDirectory, "nlp-cache");
+            _cacheDir = Path.Combine(AppPaths.DataDirectory, "nlp-cache");
         }
 
         // Constructor for testing
@@ -73,7 +84,10 @@ namespace alphaWriter.Services.Nlp
             try
             {
                 var json = File.ReadAllText(path);
-                return JsonSerializer.Deserialize<PersistedAnalysisData>(json);
+                var data = JsonSerializer.Deserialize<PersistedAnalysisData>(json, AnalysisJsonOptions);
+                // Older formats carry sentence indices from a different splitter and no
+                // spans; showing them would misplace highlights. Re-run analysis instead.
+                return data?.FormatVersion == AnalysisFormatVersion ? data : null;
             }
             catch
             {
@@ -88,7 +102,8 @@ namespace alphaWriter.Services.Nlp
 
             var path = GetAnalysisPath(bookId);
             var tmpPath = path + ".tmp";
-            var json = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
+            data.FormatVersion = AnalysisFormatVersion;
+            var json = JsonSerializer.Serialize(data, AnalysisJsonOptions);
             await File.WriteAllTextAsync(tmpPath, json);
             File.Move(tmpPath, path, overwrite: true);
         }

@@ -20,5 +20,14 @@ namespace alphaWriter.ViewModels
         }
 
         public ICommand? Command { get; set; }
+
+        /// <summary>Every crumb after the book is preceded by a separator.</summary>
+        public bool ShowSeparator => Level != "book";
+
+        /// <summary>A navigable crumb (rendered as a link).</summary>
+        public bool IsLink => Command is not null;
+
+        /// <summary>The current location (rendered as plain text).</summary>
+        public bool IsCurrent => Command is null;
     }
 }

@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+    Write workspace sidebar: the whole book as one outline.
+    Chapters expand to show their scenes; drag rows to reorder, or drop a scene on
+    another chapter to move it there. Double-click a row to rename it.
+-->
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:alphaWriter.ViewModels"
+             xmlns:views="clr-namespace:alphaWriter.Views.Workspaces"
+             xmlns:converters="clr-namespace:alphaWriter.Converters"
+             x:Class="alphaWriter.Views.Workspaces.OutlineView"
+             x:Name="Root">
+
+    <ContentView.Resources>
+        <converters:BoolToOpacityConverter x:Key="EnabledOpacity" />
+        <converters:InvertBoolConverter x:Key="InvertBool" />
+        <DataTemplate x:Key="ChapterRowTemplate" x:DataType="vm:ChapterOutlineRow">
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto"
+                  RowDefinitions="Auto,Auto,Auto"
+                  BackgroundColor="{Binding IsSelected, Converter={StaticResource SelectedTabConverter}, ConverterParameter=row}"
+                  Padding="0,2"
+                  ToolTipProperties.Text="{Binding Chapter.Title}">
+                <Grid.GestureRecognizers>
+                    <TapGestureRecognizer
+                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:WriterViewModel}}, Path=OpenOutlineRowCommand}"
+                        CommandParameter="{Binding .}" />
+                    <TapGestureRecognizer
+                        NumberOfTapsRequired="2"
+                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:WriterViewModel}}, Path=RenameChapterCommand}"
+                        CommandParameter="{Binding Chapter}" />
+                    <DropGestureRecognizer AllowDrop="True"
+                        DragOver="OnRowDragOver"
+                        DragLeave="OnRowDragLeave"
+                        Drop="OnRowDrop" />
+                    <DragGestureRecognizer CanDrag="True"
+                        DragStarting="OnRowDragStarting"
+                        DropCompleted="OnRowDragCompleted" />
+                </Grid.GestureRecognizers>
+
+                <BoxView Grid.Row="0" Grid.ColumnSpan="5" HeightRequest="2" IsVisible="False"
+                         BackgroundColor="{StaticResource AccentPrimary}" />
+
+                <Button Grid.Row="1" Grid.Column="0"
+                        Text="{Binding ExpandGlyph}"
+                        Opacity="{Binding HasScenes, Converter={StaticResource EnabledOpacity}, ConverterParameter=0}"
+                        InputTransparent="{Binding HasScenes, Converter={StaticResource InvertBool}}"
+                        Style="{StaticResource IconButton}"
+                        FontSize="12"
+                        MinimumWidthRequest="24"
+                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:WriterViewModel}}, Path=ToggleChapterExpandedCommand}"
+                        CommandParameter="{Binding .}"
+                        ToolTipProperties.Text="{Binding ExpandHint}"
+                        SemanticProperties.Description="{Binding ExpandHint}" />
+                <!-- Chapter number in its own column so it never runs into the title -->
+                <Grid Grid.Row="1" Grid.Column="1" ColumnDefinitions="Auto,*" ColumnSpacing="8" VerticalOptions="Center">
+                    <Label Grid.Column="0"
+                           Text="{Binding Number}"
+                           TextColor="{StaticResource TextSecondary}"
+                           FontSize="14"
+                           FontAttributes="Bold"
+                           MinimumWidthRequest="14"
+                           HorizontalTextAlignment="End" />
+                    <VerticalStackLayout Grid.Column="1" Spacing="0">
+                        <Label Text="{Binding Chapter.Title}"
+                               TextColor="{StaticResource TextPrimary}"
+                               FontSize="14"
+                               FontAttributes="Bold"
+                               LineBreakMode="TailTruncation" />
+                        <Label Text="{Binding SceneCountText}"
+                               TextColor="{StaticResource TextSecondary}"
+                               FontSize="11" />
+                    </VerticalStackLayout>
+                </Grid>
+                <Label Grid.Row="1" Grid.Column="2"
+                       Text="{Binding Chapter.WordCount, StringFormat='{0:N0}'}"
+                       Style="{StaticResource WordCountLabel}"
+                       ToolTipProperties.Text="Words in this chapter (outline scenes excluded)" />
+                <Button Grid.Row="1" Grid.Column="3" Text="+"
+                        Style="{StaticResource IconButton}"
+                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:WriterViewModel}}, Path=AddSceneToChapterCommand}"
+                        CommandParameter="{Binding Chapter}"
+                        ToolTipProperties.Text="Add a scene to this chapter"
+                        SemanticProperties.Description="Add scene" />
+                <Button Grid.Row="1" Grid.Column="4" Text="×"
+                        Style="{StaticResource DangerIconButton}"
+                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:WriterViewModel}}, Path=DeleteChapterCommand}"
+                        CommandParameter="{Binding Chapter}"
+                        ToolTipProperties.Text="Delete chapter"
+                        SemanticProperties.Description="Delete chapter" />
+
+                <BoxView Grid.Row="2" Grid.ColumnSpan="5" HeightRequest="2" IsVisible="False"
+                         BackgroundColor="{StaticResource AccentPrimary}" />
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate x:Key="SceneRowTemplate" x:DataType="vm:SceneOutlineRow">
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto"
+                  RowDefinitions="Auto,Auto,Auto"
+                  BackgroundColor="{Binding IsSelected, Converter={StaticResource SelectedTabConverter}, ConverterParameter=row}"
+                  Padding="28,1,0,1"
+                  ToolTipProperties.Text="{Binding Scene.Title}">
+                <Grid.GestureRecognizers>
+                    <TapGestureRecognizer
+                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:WriterViewModel}}, Path=OpenOutlineRowCommand}"
+                        CommandParameter="{Binding .}" />
+                    <TapGestureRecognizer
+                        NumberOfTapsRequired="2"
+                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:WriterViewModel}}, Path=RenameSceneCommand}"
+                        CommandParameter="{Binding Scene}" />
+                    <DropGestureRecognizer AllowDrop="True"
+                        DragOver="OnRowDragOver"
+                        DragLeave="OnRowDragLeave"
+                        Drop="OnRowDrop" />
+                    <DragGestureRecognizer CanDrag="True"
+                        DragStarting="OnRowDragStarting"
+                        DropCompleted="OnRowDragCompleted" />
+                </Grid.GestureRecognizers>
+
+                <BoxView Grid.Row="0" Grid.ColumnSpan="5" HeightRequest="2" IsVisible="False"
+                         BackgroundColor="{StaticResource AccentPrimary}" />
+
+                <BoxView Grid.Row="1" Grid.Column="0"
+                         WidthRequest="7" HeightRequest="7" CornerRadius="4"
+                         Color="{Binding Scene.Status, Converter={converters:SceneStatusColorConverter}}"
+                         VerticalOptions="Center"
+                         ToolTipProperties.Text="{Binding Scene.Status, Converter={converters:SceneStatusDisplayConverter}}" />
+                <Label Grid.Row="1" Grid.Column="1"
+                       Text="{Binding Scene.Title}"
+                       Style="{StaticResource ListItemLabel}"
+                       FontSize="13"
+                       LineBreakMode="TailTruncation" />
+                <Border Grid.Row="1" Grid.Column="2"
+                        IsVisible="{Binding Scene.HasAnalysisNotes}"
+                        BackgroundColor="#3A2A2A35"
+                        StrokeShape="RoundRectangle 7"
+                        Stroke="#E5C07B"
+                        StrokeThickness="1"
+                        HeightRequest="16"
+                        MinimumWidthRequest="16"
+                        Padding="3,0"
+                        VerticalOptions="Center"
+                        Margin="0,0,4,0"
+                        ToolTipProperties.Text="Editorial notes in this scene">
+                    <Label Text="{Binding Scene.AnalysisNoteCount}"
+                           TextColor="#E5C07B" FontSize="9"
+                           HorizontalOptions="Center" VerticalOptions="Center" />
+                </Border>
+                <Label Grid.Row="1" Grid.Column="3"
+                       Text="{Binding Scene.WordCount, StringFormat='{0:N0}'}"
+                       Style="{StaticResource WordCountLabel}" />
+                <Button Grid.Row="1" Grid.Column="4" Text="×"
+                        Style="{StaticResource DangerIconButton}"
+                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:WriterViewModel}}, Path=DeleteSceneCommand}"
+                        CommandParameter="{Binding Scene}"
+                        ToolTipProperties.Text="Delete scene"
+                        SemanticProperties.Description="Delete scene" />
+
+                <BoxView Grid.Row="2" Grid.ColumnSpan="5" HeightRequest="2" IsVisible="False"
+                         BackgroundColor="{StaticResource AccentPrimary}" />
+            </Grid>
+        </DataTemplate>
+
+        <views:OutlineRowTemplateSelector x:Key="RowSelector"
+                                          ChapterTemplate="{StaticResource ChapterRowTemplate}"
+                                          SceneTemplate="{StaticResource SceneRowTemplate}" />
+    </ContentView.Resources>
+
+    <Grid RowDefinitions="Auto,*">
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Padding="0,4,4,0">
+            <Label Text="OUTLINE" Style="{StaticResource PanelHeaderLabel}" />
+            <Button Grid.Column="1" Text="+ Chapter"
+                    Style="{StaticResource IconButton}"
+                    FontSize="12"
+                    Command="{Binding AddChapterCommand}"
+                    IsEnabled="{Binding HasSelectedBook}"
+                    ToolTipProperties.Text="Add a chapter at the end of the book" />
+        </Grid>
+
+        <CollectionView Grid.Row="1"
+                        ItemsSource="{Binding OutlineRows}"
+                        ItemTemplate="{StaticResource RowSelector}"
+                        SelectionMode="None">
+            <CollectionView.EmptyView>
+                <Label Text="No chapters yet. Use “+ Chapter” to start your outline."
+                       TextColor="{StaticResource TextSecondary}"
+                       FontSize="12"
+                       Margin="12,8"
+                       LineBreakMode="WordWrap" />
+            </CollectionView.EmptyView>
+        </CollectionView>
+    </Grid>
+</ContentView>

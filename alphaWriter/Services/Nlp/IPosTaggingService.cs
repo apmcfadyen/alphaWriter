@@ -24,5 +24,12 @@ namespace alphaWriter.Services.Nlp
         /// of (Value, Pos) token tuples.
         /// </summary>
         IReadOnlyList<(string Value, string Pos)>[] TagSentences(IReadOnlyList<string> sentences);
+
+        /// <summary>
+        /// Tags each sentence and returns, per sentence, (Start, Length, Pos) spans whose
+        /// offsets are relative to that sentence's text. Used to align tags with
+        /// SceneDocument tokens by character position.
+        /// </summary>
+        IReadOnlyList<(int Start, int Length, string Pos)>[] TagSpans(IReadOnlyList<string> sentences);
     }
 }

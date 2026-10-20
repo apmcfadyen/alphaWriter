@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+    Book workspace: title, author, synopsis, bio and word target.
+-->
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:models="clr-namespace:alphaWriter.Models"
+             xmlns:analysis="clr-namespace:alphaWriter.Models.Analysis"
+             xmlns:vm="clr-namespace:alphaWriter.ViewModels"
+             xmlns:converters="clr-namespace:alphaWriter.Converters"
+             x:Class="alphaWriter.Views.Workspaces.BookMain">
+    <!-- Book info editor (visible when ShowBookInfo is active) -->
+    <Grid
+          BackgroundColor="{StaticResource EditorBackground}"
+          RowDefinitions="Auto,*">
+
+        <!-- Book info toolbar -->
+        <Grid Grid.Row="0"
+              BackgroundColor="{StaticResource ToolbarBackground}"
+              ColumnDefinitions="*,Auto"
+              Padding="4,2">
+            <Label Grid.Column="0"
+                   Text="Book — details and word target"
+                   TextColor="{StaticResource TextPrimary}"
+                   FontSize="13"
+                   FontAttributes="Bold"
+                   Margin="8,0"
+                   VerticalOptions="Center" />
+        </Grid>
+
+        <ScrollView Grid.Row="1">
+            <VerticalStackLayout Padding="16,16,24,24" Spacing="12" MaximumWidthRequest="760" HorizontalOptions="Start">
+
+                <Label Text="BOOK DETAILS" Style="{StaticResource PanelHeaderLabel}" />
+
+                <Label Text="Title" Style="{StaticResource FieldLabel}" />
+                <Entry Text="{Binding SelectedBook.Title}"
+                       Style="{StaticResource ElementFieldEntry}"
+                       Placeholder="Book title"
+                       Unfocused="OnBookInfoFieldUnfocused" />
+
+                <Label Text="Author" Style="{StaticResource FieldLabel}" />
+                <Entry Text="{Binding SelectedBook.Author}"
+                       Style="{StaticResource ElementFieldEntry}"
+                       Placeholder="Author name"
+                       Unfocused="OnBookInfoFieldUnfocused" />
+
+                <Label Text="Synopsis" Style="{StaticResource FieldLabel}" />
+                <Editor Text="{Binding SelectedBook.Description}"
+                        Style="{StaticResource ElementFieldEditor}"
+                        HeightRequest="120"
+                        Placeholder="Brief synopsis or blurb..."
+                        Unfocused="OnBookInfoFieldUnfocused" />
+
+                <Label Text="Author Bio" Style="{StaticResource FieldLabel}" />
+                <Editor Text="{Binding SelectedBook.AuthorBio}"
+                        Style="{StaticResource ElementFieldEditor}"
+                        HeightRequest="100"
+                        Placeholder="Author biography..."
+                        Unfocused="OnBookInfoFieldUnfocused" />
+
+                <Label Text="WORD TARGET" Style="{StaticResource PanelHeaderLabel}" Margin="0,8,0,0" />
+
+                <Label Text="Target Word Count" Style="{StaticResource FieldLabel}" />
+                <Entry Text="{Binding SelectedBook.WordTarget}"
+                       Style="{StaticResource ElementFieldEntry}"
+                       Placeholder="0 (leave blank for no target)"
+                       Keyboard="Numeric"
+                       Unfocused="OnBookInfoFieldUnfocused" />
+
+                <VerticalStackLayout IsVisible="{Binding SelectedBook.HasWordTarget}" Spacing="4">
+                    <Label Text="{Binding SelectedBook.WordCountSummary}"
+                           Style="{StaticResource WordCountLabel}" />
+                    <ProgressBar Progress="{Binding SelectedBook.WordCountProgress}"
+                                 ProgressColor="{StaticResource AccentPrimary}"
+                                 BackgroundColor="{StaticResource SurfaceRaised}"
+                                 HeightRequest="6" />
+                </VerticalStackLayout>
+
+            </VerticalStackLayout>
+        </ScrollView>
+    </Grid>
+</ContentView>

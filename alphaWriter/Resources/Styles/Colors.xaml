@@ -20,7 +20,7 @@
     <!-- Text hierarchy -->
     <Color x:Key="TextPrimary">#E8E4DC</Color>
     <Color x:Key="TextSecondary">#9E9AA0</Color>
-    <Color x:Key="TextDisabled">#5A5A6A</Color>
+    <Color x:Key="TextDisabled">#8A8A9A</Color> <!-- ≥4.5:1 on SurfaceMid -->
     <Color x:Key="TextAccent">#A89EC9</Color>
 
     <!-- Accent / interactive -->
@@ -40,6 +40,6 @@
 
     <!-- Word count badge -->
     <Color x:Key="WordCountBackground">#2A2A38</Color>
-    <Color x:Key="WordCountText">#7A8A7A</Color>
+    <Color x:Key="WordCountText">#8C9A8C</Color> <!-- ≥4.5:1 on SurfaceRaised -->
 
 </ResourceDictionary>

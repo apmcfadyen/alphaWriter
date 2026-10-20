@@ -2,75 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using alphaWriter.Models.Analysis;
+using alphaWriter.Services.Nlp.Parsing;
+using alphaWriter.Services.Nlp.Rules;
 
 namespace alphaWriter.Services.Nlp
 {
     public class StyleAnalyzer : IStyleAnalyzer
     {
-        // ── Be-verb lookup for passive voice detection ────────────────────────
-
-        private static readonly HashSet<string> BeVerbs =
-            new(["am", "is", "are", "was", "were", "be", "been", "being"],
-                StringComparer.OrdinalIgnoreCase);
-
-        // ── Emotion words that "name" a feeling directly (show-don't-tell) ───
-
-        private static readonly HashSet<string> TellingEmotionWords =
-            new(StringComparer.OrdinalIgnoreCase)
-            {
-                "angry", "angered", "sad", "sadness", "happy", "happiness", "afraid",
-                "scared", "worried", "nervous", "excited", "surprised", "shocked",
-                "confused", "tired", "exhausted", "upset", "frustrated", "embarrassed",
-                "ashamed", "guilty", "proud", "jealous", "lonely", "bored", "curious",
-                "disgusted", "horrified", "terrified", "anxious", "depressed", "miserable",
-                "hopeful", "hopeless", "joyful", "cheerful", "melancholy", "content",
-                "distressed", "frightened", "startled", "elated", "bitter", "resentful",
-                "grief", "sorrow", "joy", "fear", "rage", "fury", "panic", "dread",
-                "despair", "ecstasy", "bliss", "guilt", "shame", "envy", "jealousy",
-                "resentment", "bitterness", "disappointment", "regret", "remorse",
-                "apprehensive", "heartbroken", "devastated", "overjoyed", "thrilled",
-                "gloomy", "forlorn", "wistful", "relieved", "humiliated", "shamed",
-                "delighted", "enraged", "terrified", "bewildered"
-            };
-
-        // Verbs that introduce a told emotional state
-        private static readonly HashSet<string> FeelingVerbs =
-            new(StringComparer.OrdinalIgnoreCase)
-            {
-                "felt", "feel", "feels", "feeling",
-                "seemed", "seem", "seems",
-                "looked", "appeared", "appears", "appear",
-                "was", "were", "is", "are", "become", "became"
-            };
-
-        // Subordinating conjunctions for clause-density detection
-        private static readonly HashSet<string> SubordConjunctions =
-            new(StringComparer.OrdinalIgnoreCase)
-            {
-                "because", "although", "though", "unless", "until",
-                "whereas", "whenever", "wherever", "whoever", "whatever",
-                "however", "if", "when", "while", "since", "before",
-                "after", "as", "whether", "once", "provided"
-            };
-
-        // Stopwords for proximity-echo content-word filtering
-        private static readonly HashSet<string> Stopwords =
-            new(StringComparer.OrdinalIgnoreCase)
-            {
-                "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
-                "have", "has", "had", "do", "does", "did", "will", "would", "could",
-                "should", "may", "might", "must", "shall", "can", "to", "of", "in",
-                "on", "at", "by", "for", "with", "as", "from", "up", "out", "into",
-                "then", "than", "this", "that", "these", "those", "it", "its", "his",
-                "her", "our", "your", "their", "my", "we", "they", "he", "she",
-                "and", "or", "but", "not", "no", "so", "if", "when", "where", "how",
-                "all", "any", "both", "each", "more", "most", "other", "some", "just",
-                "also", "very", "about", "over", "such", "only", "here", "there",
-                "what", "who", "him", "them", "me", "us", "you", "been", "still",
-                "even", "back", "after", "again", "down", "through", "never", "now",
-                "well", "said", "could", "would"
-            };
-
         // ── Analyze ───────────────────────────────────────────────────────────
 
         public StyleProfile Analyze(IReadOnlyList<string> sentences)
@@ -180,6 +118,7 @@ namespace alphaWriter.Services.Nlp
                         : "Shorter sentences accelerate pace — if this is a reflective or emotional scene, that urgency may undercut the tone.";
                     notes.Add(new NlpNote
                     {
+                        RuleId = RuleCatalog.SentenceLengthDrift.Id,
                         Severity = NlpNoteSeverity.Warning,
                         Category = NlpNoteCategory.CopyEditor,
                         SceneId = sceneId,
@@ -206,6 +145,7 @@ namespace alphaWriter.Services.Nlp
                     notes.Add(new NlpNote
                     {
                         Severity = NlpNoteSeverity.Info,
+                        RuleId = RuleCatalog.VocabularyDrift.Id,
                         Category = NlpNoteCategory.DevelopmentalEditor,
                         SceneId = sceneId,
                         SceneTitle = sceneTitle,
@@ -230,6 +170,7 @@ namespace alphaWriter.Services.Nlp
                     notes.Add(new NlpNote
                     {
                         Severity = NlpNoteSeverity.Info,
+                        RuleId = RuleCatalog.ReadabilityDrift.Id,
                         Category = NlpNoteCategory.DevelopmentalEditor,
                         SceneId = sceneId,
                         SceneTitle = sceneTitle,
@@ -244,332 +185,75 @@ namespace alphaWriter.Services.Nlp
             return notes;
         }
 
-        // ── Passive voice detection ───────────────────────────────────────────
+        // ── Rule adapters ────────────────────────────────────────────────────
+        // The detectors below predate the rule engine. They now build a SceneDocument
+        // from the sentence list and delegate to the corresponding rule, so the legacy
+        // API and the engine can never disagree.
+
+        private List<NlpNote> RunRules(IReadOnlyList<string> sentences, IPosTaggingService? posService,
+            string sceneId, string sceneTitle, string chapterTitle, params ISceneRule[] rules)
+        {
+            if (sentences.Count == 0) return [];
+
+            var doc = BuildDocument(sentences, posService);
+            var ctx = new SceneRuleContext
+            {
+                Document = doc,
+                SceneId = sceneId,
+                SceneTitle = sceneTitle,
+                ChapterTitle = chapterTitle,
+                Style = Analyze(sentences)
+            };
+            return new ProseRuleEngine(rules, []).EvaluateScene(ctx);
+        }
+
+        private static SceneDocument BuildDocument(IReadOnlyList<string> sentences, IPosTaggingService? posService)
+        {
+            var doc = SceneDocumentBuilder.FromSentences(sentences);
+            if (posService is not null)
+                SceneDocumentBuilder.ApplyLegacyTags(doc, posService.TagSentences(sentences));
+            return doc;
+        }
 
         public List<NlpNote> DetectPassiveVoice(IReadOnlyList<string> sentences,
             IPosTaggingService posService,
-            string sceneId, string sceneTitle, string chapterTitle)
-        {
-            var notes = new List<NlpNote>();
-            if (sentences.Count == 0) return notes;
-
-            var taggedSentences = posService.TagSentences(sentences);
-
-            for (int i = 0; i < sentences.Count; i++)
-            {
-                if (ContainsPassiveConstruction(taggedSentences[i]))
-                {
-                    notes.Add(new NlpNote
-                    {
-                        Severity = NlpNoteSeverity.Info,
-                        Category = NlpNoteCategory.CopyEditor,
-                        SceneId = sceneId,
-                        SceneTitle = sceneTitle,
-                        ChapterTitle = chapterTitle,
-                        SentenceIndex = i,
-                        Message = $"Sentence {i + 1} uses passive voice: " +
-                                  $"\"{TruncateSentence(sentences[i], 70)}\" — " +
-                                  "the actor is hidden or delayed. Rewriting in active voice sharpens the action " +
-                                  "and keeps readers oriented in who is doing what."
-                    });
-                }
-            }
-
-            return notes;
-        }
+            string sceneId, string sceneTitle, string chapterTitle) =>
+            RunRules(sentences, posService, sceneId, sceneTitle, chapterTitle, new PassiveVoiceRule());
 
         public int CountPassiveSentences(IReadOnlyList<string> sentences, IPosTaggingService posService)
         {
             if (sentences.Count == 0) return 0;
-            var taggedSentences = posService.TagSentences(sentences);
-            return taggedSentences.Count(ContainsPassiveConstruction);
+            var doc = BuildDocument(sentences, posService);
+            return doc.Sentences.Count(s => PassiveVoiceRule.FindPassive(s.Tokens) is not null);
         }
-
-        private static bool ContainsPassiveConstruction(IReadOnlyList<(string Value, string Pos)> tokens)
-        {
-            for (int j = 0; j < tokens.Count - 1; j++)
-            {
-                var (value, pos) = tokens[j];
-                if (pos != "AUX" || !BeVerbs.Contains(value)) continue;
-
-                for (int k = j + 1; k < tokens.Count; k++)
-                {
-                    var nextPos = tokens[k].Pos;
-                    if (nextPos == "VERB") return true;
-                    if (nextPos != "ADV" && nextPos != "AUX" && nextPos != "PART")
-                        break;
-                }
-            }
-            return false;
-        }
-
-        // ── Adverb density detection ──────────────────────────────────────────
 
         public List<NlpNote> DetectAdverbDensity(IReadOnlyList<string> sentences,
-            string sceneId, string sceneTitle, string chapterTitle)
-        {
-            var notes = new List<NlpNote>();
-            if (sentences.Count == 0) return notes;
+            string sceneId, string sceneTitle, string chapterTitle) =>
+            RunRules(sentences, null, sceneId, sceneTitle, chapterTitle,
+                new AdverbClusterRule(), new AdverbDensityRule());
 
-            int totalWords = 0;
-            int totalLyWords = 0;
-
-            for (int i = 0; i < sentences.Count; i++)
-            {
-                var words = sentences[i]
-                    .Split([' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
-
-                var lyWords = words
-                    .Select(w => w.Trim('.', ',', '!', '?', ';', ':', '"',
-                                        '\u201C', '\u201D', '\'', '\u2018', '\u2019'))
-                    .Where(w => w.Length >= 5 &&
-                                w.EndsWith("ly", StringComparison.OrdinalIgnoreCase))
-                    .ToList();
-
-                totalWords += words.Length;
-                totalLyWords += lyWords.Count;
-
-                if (lyWords.Count >= 2)
-                {
-                    var examples = string.Join(", ", lyWords.Take(3).Select(w => $"\"{w}\""));
-                    notes.Add(new NlpNote
-                    {
-                        Severity = NlpNoteSeverity.Info,
-                        Category = NlpNoteCategory.CopyEditor,
-                        SceneId = sceneId,
-                        SceneTitle = sceneTitle,
-                        ChapterTitle = chapterTitle,
-                        SentenceIndex = i,
-                        Message = $"Sentence {i + 1} leans on {lyWords.Count} adverbs ({examples}) — " +
-                                  "a signal that the verbs may not be doing enough work. " +
-                                  "Replacing 'walked quickly' with 'strode' or 'spoke softly' with 'murmured' " +
-                                  "eliminates the modifier and sharpens the image."
-                    });
-                }
-            }
-
-            if (totalWords >= 50 && totalLyWords > 0)
-            {
-                double density = (double)totalLyWords / totalWords;
-                if (density > 0.03)
-                {
-                    notes.Add(new NlpNote
-                    {
-                        Severity = NlpNoteSeverity.Info,
-                        Category = NlpNoteCategory.CopyEditor,
-                        SceneId = sceneId,
-                        SceneTitle = sceneTitle,
-                        ChapterTitle = chapterTitle,
-                        Message = $"'{sceneTitle}' has an adverb density of {density:P0} ({totalLyWords} adverbs across {totalWords} words) — " +
-                                  "above the threshold where adverbs start to pad rather than clarify. " +
-                                  "Audit each -ly word and ask whether a more specific verb makes it redundant."
-                    });
-                }
-            }
-
-            return notes;
-        }
-
-        public double ComputeAdverbDensity(IReadOnlyList<string> sentences)
-        {
-            int totalWords = 0, totalLyWords = 0;
-            foreach (var sentence in sentences)
-            {
-                var words = sentence.Split([' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
-                totalWords += words.Length;
-                totalLyWords += words
-                    .Select(w => w.Trim('.', ',', '!', '?', ';', ':', '"', '\u201C', '\u201D', '\'', '\u2018', '\u2019'))
-                    .Count(w => w.Length >= 5 && w.EndsWith("ly", StringComparison.OrdinalIgnoreCase));
-            }
-            return totalWords > 0 ? (double)totalLyWords / totalWords : 0;
-        }
-
-        // ── Show-don't-tell detection ─────────────────────────────────────────
+        public double ComputeAdverbDensity(IReadOnlyList<string> sentences) =>
+            sentences.Count == 0 ? 0 : AdverbDetection.Density(SceneDocumentBuilder.FromSentences(sentences));
 
         public List<NlpNote> DetectShowDontTell(IReadOnlyList<string> sentences,
-            string sceneId, string sceneTitle, string chapterTitle)
-        {
-            var notes = new List<NlpNote>();
-            if (sentences.Count == 0) return notes;
-
-            for (int i = 0; i < sentences.Count; i++)
-            {
-                var (feelingVerb, emotionWord) = FindTellingPattern(sentences[i]);
-                if (feelingVerb == null || emotionWord == null) continue;
-
-                // Skip dialogue lines — "telling" is more natural in speech
-                if (NlpTextExtractor.IsDialogue(sentences[i])) continue;
-
-                notes.Add(new NlpNote
-                {
-                    Severity = NlpNoteSeverity.Warning,
-                    Category = NlpNoteCategory.LineEditor,
-                    SceneId = sceneId,
-                    SceneTitle = sceneTitle,
-                    ChapterTitle = chapterTitle,
-                    SentenceIndex = i,
-                    Message = $"Sentence {i + 1} names the emotion directly — \"{feelingVerb} {emotionWord}\" labels the " +
-                              "feeling where a physical sign or action would be more powerful. " +
-                              $"What does {emotionWord} look like in the body, in the room, in what the character does next?"
-                });
-            }
-
-            return notes;
-        }
-
-        private static (string? feelingVerb, string? emotionWord) FindTellingPattern(string sentence)
-        {
-            var words = sentence
-                .Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries)
-                .Select(w => w.Trim('.', ',', '!', '?', ';', ':', '"', '\'', '\u201C', '\u201D', '\u2018', '\u2019'))
-                .Where(w => w.Length > 0)
-                .ToArray();
-
-            for (int i = 0; i < words.Length; i++)
-            {
-                if (!FeelingVerbs.Contains(words[i])) continue;
-
-                // Look ahead up to 4 words for an emotion word
-                for (int j = i + 1; j < Math.Min(i + 5, words.Length); j++)
-                {
-                    if (TellingEmotionWords.Contains(words[j]))
-                        return (words[i].ToLowerInvariant(), words[j].ToLowerInvariant());
-                }
-            }
-            return (null, null);
-        }
-
-        // ── Proximity echo detection ──────────────────────────────────────────
+            string sceneId, string sceneTitle, string chapterTitle) =>
+            RunRules(sentences, null, sceneId, sceneTitle, chapterTitle, new ShowDontTellRule());
 
         public List<NlpNote> DetectProximityEchoes(IReadOnlyList<string> sentences,
-            string sceneId, string sceneTitle, string chapterTitle)
-        {
-            var notes = new List<NlpNote>();
-            if (sentences.Count < 3) return notes;
-
-            // Collect content words (unique per sentence)
-            var sentenceWords = sentences
-                .Select(s => ExtractContentWords(s))
-                .ToList();
-
-            // Map each word to the sentence indices where it appears
-            var wordOccurrences = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
-            for (int i = 0; i < sentenceWords.Count; i++)
-            {
-                foreach (var word in sentenceWords[i])
-                {
-                    if (!wordOccurrences.TryGetValue(word, out var list))
-                        wordOccurrences[word] = list = [];
-                    list.Add(i);
-                }
-            }
-
-            var flaggedWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            foreach (var (word, indices) in wordOccurrences.OrderBy(kv => kv.Value[0]))
-            {
-                if (flaggedWords.Contains(word) || indices.Count < 3) continue;
-
-                // Check if any 3 occurrences span ≤ 4 sentence gaps (5-sentence window)
-                for (int i = 0; i <= indices.Count - 3; i++)
-                {
-                    if (indices[i + 2] - indices[i] > 4) continue;
-
-                    flaggedWords.Add(word);
-                    int windowCount = indices.Count(idx => idx >= indices[i] && idx <= indices[i] + 4);
-                    notes.Add(new NlpNote
-                    {
-                        Severity = NlpNoteSeverity.Warning,
-                        Category = NlpNoteCategory.CopyEditor,
-                        SceneId = sceneId,
-                        SceneTitle = sceneTitle,
-                        ChapterTitle = chapterTitle,
-                        SentenceIndex = indices[i],
-                        Message = $"'{word}' appears {windowCount} times within five sentences of sentence {indices[i] + 1} — " +
-                                  "the repetition may register as an echo even when readers can't name why. " +
-                                  "A synonym or restructured sentence breaks the rhythm without losing the idea."
-                    });
-                    break;
-                }
-            }
-
-            return notes;
-        }
-
-        private static HashSet<string> ExtractContentWords(string sentence)
-        {
-            return sentence
-                .Split([' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
-                .Select(w => w.ToLowerInvariant()
-                    .Trim('.', ',', '!', '?', ';', ':', '"', '\'', '\u201C', '\u201D', '\u2018', '\u2019', '-', '\u2014'))
-                .Where(w => w.Length >= 5 && !Stopwords.Contains(w) && w.All(char.IsLetter))
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        }
-
-        // ── Sentence opener monotony detection ───────────────────────────────
+            string sceneId, string sceneTitle, string chapterTitle) =>
+            RunRules(sentences, null, sceneId, sceneTitle, chapterTitle, new EchoRule());
 
         public List<NlpNote> DetectSentenceOpenerMonotony(IReadOnlyList<string> sentences,
             IPosTaggingService posService,
-            string sceneId, string sceneTitle, string chapterTitle)
-        {
-            var notes = new List<NlpNote>();
-            if (sentences.Count < 5) return notes;
+            string sceneId, string sceneTitle, string chapterTitle) =>
+            RunRules(sentences, posService, sceneId, sceneTitle, chapterTitle, new OpenerMonotonyRule());
 
-            var taggedSentences = posService.TagSentences(sentences);
+        public List<NlpNote> DetectSubordinateClauseDensity(IReadOnlyList<string> sentences,
+            string sceneId, string sceneTitle, string chapterTitle) =>
+            RunRules(sentences, null, sceneId, sceneTitle, chapterTitle,
+                new ClauseStackingRule(), new ClauseDensityRule());
 
-            var openerCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            int taggedCount = 0;
-
-            foreach (var tokens in taggedSentences)
-            {
-                var firstContent = tokens.FirstOrDefault(t =>
-                    t.Pos != "PUNCT" && t.Pos != "SPACE" && !string.IsNullOrWhiteSpace(t.Value));
-                if (firstContent == default) continue;
-
-                var category = ClassifyOpener(firstContent.Pos);
-                openerCounts.TryGetValue(category, out int count);
-                openerCounts[category] = count + 1;
-                taggedCount++;
-            }
-
-            if (taggedCount < 5) return notes;
-
-            var dominant = openerCounts.OrderByDescending(kv => kv.Value).First();
-            double dominantFraction = (double)dominant.Value / taggedCount;
-
-            if (dominantFraction > 0.60)
-            {
-                int percent = (int)Math.Round(dominantFraction * 100);
-                notes.Add(new NlpNote
-                {
-                    Severity = NlpNoteSeverity.Info,
-                    Category = NlpNoteCategory.LineEditor,
-                    SceneId = sceneId,
-                    SceneTitle = sceneTitle,
-                    ChapterTitle = chapterTitle,
-                    Message = $"{percent}% of sentences in '{sceneTitle}' open with a {dominant.Key} — " +
-                              "the rhythmic pattern becomes noticeable on the page. " +
-                              "Varying your openers (starting with an adverb, a dependent clause, " +
-                              "or an inverted subject) creates variety without changing meaning."
-                });
-            }
-
-            return notes;
-        }
-
-        private static string ClassifyOpener(string pos) => pos switch
-        {
-            "NOUN" or "PROPN" => "noun subject",
-            "PRON" => "pronoun",
-            "VERB" => "verb phrase",
-            "ADV" => "adverb",
-            "SCONJ" or "CCONJ" => "conjunction",
-            "DET" => "article or determiner",
-            "ADJ" => "adjective",
-            "ADP" => "prepositional phrase",
-            "NUM" => "numeral",
-            _ => "other"
-        };
+        // ── Extended profile metrics ─────────────────────────────────────────
 
         private static double ComputeOpenerVariety(IReadOnlyList<(string Value, string Pos)>[] taggedSentences)
         {
@@ -581,7 +265,7 @@ namespace alphaWriter.Services.Nlp
                 var firstContent = tokens.FirstOrDefault(t =>
                     t.Pos != "PUNCT" && t.Pos != "SPACE" && !string.IsNullOrWhiteSpace(t.Value));
                 if (firstContent == default) continue;
-                var category = ClassifyOpener(firstContent.Pos);
+                var category = OpenerMonotonyRule.ClassifyOpener(firstContent.Pos);
                 openerCounts.TryGetValue(category, out int count);
                 openerCounts[category] = count + 1;
             }
@@ -600,68 +284,6 @@ namespace alphaWriter.Services.Nlp
             return maxEntropy > 0 ? entropy / maxEntropy : 0;
         }
 
-        // ── Subordinate clause density detection ─────────────────────────────
-
-        public List<NlpNote> DetectSubordinateClauseDensity(IReadOnlyList<string> sentences,
-            string sceneId, string sceneTitle, string chapterTitle)
-        {
-            var notes = new List<NlpNote>();
-            if (sentences.Count == 0) return notes;
-
-            var perSentence = sentences
-                .Select(s => CountSubordConjunctions(s))
-                .ToList();
-
-            double sceneMean = perSentence.Average();
-
-            // Per-sentence: flag when 3+ subordinate conjunctions in one sentence
-            for (int i = 0; i < sentences.Count; i++)
-            {
-                if (perSentence[i] >= 3)
-                {
-                    notes.Add(new NlpNote
-                    {
-                        Severity = NlpNoteSeverity.Info,
-                        Category = NlpNoteCategory.LineEditor,
-                        SceneId = sceneId,
-                        SceneTitle = sceneTitle,
-                        ChapterTitle = chapterTitle,
-                        SentenceIndex = i,
-                        Message = $"Sentence {i + 1} stacks {perSentence[i]} subordinate clauses in a single breath — " +
-                                  "the main idea risks getting buried under qualifications. " +
-                                  "Try splitting into two sentences, or cutting the least essential clause."
-                    });
-                }
-            }
-
-            // Scene-level: flag consistently complex prose (mean > 1.5 and at least 8 sentences)
-            if (sentences.Count >= 8 && sceneMean > 1.5)
-            {
-                notes.Add(new NlpNote
-                {
-                    Severity = NlpNoteSeverity.Info,
-                    Category = NlpNoteCategory.LineEditor,
-                    SceneId = sceneId,
-                    SceneTitle = sceneTitle,
-                    ChapterTitle = chapterTitle,
-                    Message = $"'{sceneTitle}' averages {sceneMean:F1} subordinate clauses per sentence — " +
-                              "the prose carries consistent structural weight throughout. " +
-                              "This works for introspective or literary passages; in action or dialogue-driven scenes, " +
-                              "flatter sentence structure sharpens the pace."
-                });
-            }
-
-            return notes;
-        }
-
-        private static int CountSubordConjunctions(string sentence)
-        {
-            return sentence
-                .Split([' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
-                .Select(w => w.Trim('.', ',', '!', '?', ';', ':', '"', '\'', '\u201C', '\u201D'))
-                .Count(w => SubordConjunctions.Contains(w));
-        }
-
         private static double ComputeClauseComplexity(IReadOnlyList<(string Value, string Pos)>[] taggedSentences)
         {
             if (taggedSentences.Length == 0) return 0;
@@ -670,9 +292,6 @@ namespace alphaWriter.Services.Nlp
         }
 
         // ── Helpers ───────────────────────────────────────────────────────────
-
-        private static string TruncateSentence(string s, int maxLen) =>
-            s.Length <= maxLen ? s : s[..maxLen] + "…";
 
         private static int CountSyllables(string word)
         {

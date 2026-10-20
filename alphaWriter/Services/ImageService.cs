@@ -13,7 +13,7 @@ namespace alphaWriter.Services
             if (result is null)
                 return string.Empty;
 
-            var dir = Path.Combine(FileSystem.AppDataDirectory, "images", bookId);
+            var dir = Path.Combine(AppPaths.DataDirectory, "images", bookId);
             Directory.CreateDirectory(dir);
 
             var ext = Path.GetExtension(result.FileName);
@@ -28,7 +28,7 @@ namespace alphaWriter.Services
         }
 
         public string GetFullImagePath(string relativePath)
-            => Path.Combine(FileSystem.AppDataDirectory, relativePath);
+            => Path.Combine(AppPaths.DataDirectory, relativePath);
 
         public void DeleteImage(string relativePath)
         {

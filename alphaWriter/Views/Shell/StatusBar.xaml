@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+    The single home for counts and state: scene / chapter / book words, save state,
+    and how fresh the editorial analysis is. Nothing else in the UI repeats these.
+-->
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="alphaWriter.Views.Shell.StatusBar">
+
+    <ContentView.Resources>
+        <Style x:Key="StatusText" TargetType="Label">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="TextColor" Value="{StaticResource TextSecondary}" />
+            <Setter Property="VerticalOptions" Value="Center" />
+            <Setter Property="LineBreakMode" Value="NoWrap" />
+        </Style>
+        <Style x:Key="StatusDivider" TargetType="Label" BasedOn="{StaticResource StatusText}">
+            <Setter Property="Text" Value="·" />
+            <Setter Property="Margin" Value="8,0" />
+        </Style>
+    </ContentView.Resources>
+
+    <Grid ColumnDefinitions="Auto,*,Auto"
+          Padding="12,0"
+          HeightRequest="28"
+          BackgroundColor="{StaticResource SurfaceDeep}">
+
+        <HorizontalStackLayout Grid.Column="0" VerticalOptions="Center">
+            <Label Style="{StaticResource StatusText}"
+                   IsVisible="{Binding HasSelectedScene}"
+                   Text="{Binding WordCount, StringFormat='Scene {0:N0}'}"
+                   ToolTipProperties.Text="Words in the open scene" />
+            <Label Style="{StaticResource StatusDivider}" IsVisible="{Binding HasSelectedScene}" />
+            <Label Style="{StaticResource StatusText}"
+                   IsVisible="{Binding HasSelectedChapter}"
+                   Text="{Binding SelectedChapter.WordCount, StringFormat='Chapter {0:N0}'}"
+                   ToolTipProperties.Text="Words in the open chapter (outline scenes excluded)" />
+            <Label Style="{StaticResource StatusDivider}" IsVisible="{Binding HasSelectedChapter}" />
+            <Label Style="{StaticResource StatusText}"
+                   IsVisible="{Binding HasSelectedBook}"
+                   Text="{Binding SelectedBook.WordCountSummary, StringFormat='Book {0}'}"
+                   ToolTipProperties.Text="Words in the book, and progress towards the target set in Book" />
+            <ProgressBar Progress="{Binding SelectedBook.WordCountProgress}"
+                         IsVisible="{Binding SelectedBook.HasWordTarget}"
+                         ProgressColor="{StaticResource AccentPrimary}"
+                         BackgroundColor="{StaticResource SurfaceRaised}"
+                         WidthRequest="80" HeightRequest="4"
+                         VerticalOptions="Center"
+                         Margin="8,0,0,0" />
+        </HorizontalStackLayout>
+
+        <HorizontalStackLayout Grid.Column="2" VerticalOptions="Center">
+            <Label Style="{StaticResource StatusText}"
+                   Text="{Binding AnalysisStatusText}"
+                   TextColor="{Binding AnalysisStatusColor}"
+                   IsVisible="{Binding AnalysisStatusText, Converter={StaticResource IsNotNullOrEmptyConverter}}"
+                   ToolTipProperties.Text="Open Revise to see notes or re-run the analysis">
+                <Label.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding SetWorkspaceCommand}" CommandParameter="Revise" />
+                </Label.GestureRecognizers>
+            </Label>
+            <Label Style="{StaticResource StatusDivider}"
+                   IsVisible="{Binding AnalysisStatusText, Converter={StaticResource IsNotNullOrEmptyConverter}}" />
+            <Label Style="{StaticResource StatusText}"
+                   Text="{Binding SaveStateText}"
+                   ToolTipProperties.Text="Your work is saved automatically" />
+        </HorizontalStackLayout>
+    </Grid>
+</ContentView>

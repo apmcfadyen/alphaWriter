@@ -54,6 +54,36 @@
   .entity            { color: #A89EC9; text-decoration: underline; cursor: pointer; }
   .entity-location   { color: #7EC8A4; }
   .entity-item       { color: #C8B07A; }
+
+  /* Editorial annotations — painted with the CSS Custom Highlight API, so they
+     never touch the DOM, the caret, or the saved HTML. */
+  ::highlight(aw-copy) { background-color: rgba(97,175,239,0.10);  text-decoration: underline wavy rgba(97,175,239,0.85);  text-underline-offset: 4px; }
+  ::highlight(aw-line) { background-color: rgba(229,192,123,0.10); text-decoration: underline wavy rgba(229,192,123,0.85); text-underline-offset: 4px; }
+  ::highlight(aw-dev)  { background-color: rgba(198,120,221,0.08); text-decoration: underline dotted rgba(198,120,221,0.80); text-underline-offset: 4px; }
+  ::highlight(aw-focus){ background-color: rgba(168,158,201,0.38); }
+
+  #aw-pop {
+    position: fixed; z-index: 10; display: none;
+    max-width: 380px; min-width: 240px;
+    background: #2A2A38; color: #E8E4DC;
+    border: 1px solid #3F3F52; border-radius: 6px;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.45);
+    font-family: 'Segoe UI', system-ui, sans-serif; font-size: 13px; line-height: 1.45;
+    padding: 10px 12px;
+  }
+  #aw-pop.open { display: block; }
+  #aw-pop .aw-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+  #aw-pop .aw-dot { width: 8px; height: 8px; border-radius: 4px; flex: none; }
+  #aw-pop .aw-title { font-weight: 600; font-size: 12px; color: #C9C4D8; }
+  #aw-pop .aw-msg { color: #D8D4CC; margin-bottom: 8px; }
+  #aw-pop .aw-sugg { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  #aw-pop .aw-sugg button { background: #3A5A40; color: #E8F5E9; border-color: #4E7A56; }
+  #aw-pop .aw-actions { display: flex; flex-wrap: wrap; gap: 6px; border-top: 1px solid #3A3A4C; padding-top: 8px; }
+  #aw-pop button {
+    font: inherit; font-size: 12px; cursor: pointer;
+    background: #34344A; color: #D8D4E8; border: 1px solid #45455C; border-radius: 4px; padding: 3px 8px;
+  }
+  #aw-pop button:hover { background: #40405A; }
 </style>
 </head>
 <body>
@@ -62,6 +92,7 @@
        spellcheck="true"
        data-placeholder="Start writing...">
   </div>
+  <div id="aw-pop" role="dialog" aria-live="polite"></div>
 
 <script>
   var _ready = false;
@@ -77,6 +108,18 @@
   // Each entry: { id, type, terms: [...sorted longest-first] }
   var _entities = [];
 
+  // ── Argument decoding ───────────────────────────────────────────────────────
+  // C# passes data as base64 (see WriterPage.JsArg). MAUI's Windows WebView wraps every
+  // script in eval('...'), which decodes escape sequences twice: a JSON """ becomes
+  // a raw quote and breaks the call. Base64 has no quotes or backslashes to mangle.
+
+  function decodeArg(b64) {
+    var bin = atob(b64);
+    var bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  }
+
   // ── Content API ─────────────────────────────────────────────────────────────
 
   function setContent(rawHtml) {
@@ -88,6 +131,8 @@
     highlighted = applyEntityHighlighting(highlighted);
     document.getElementById('editor').innerHTML = highlighted;
     _ready = true;
+    hidePopover();
+    renderAnnotations();
   }
 
   // Immediately captures the current editor DOM content into _rawContent,
@@ -138,9 +183,6 @@
     // Strip inner (entity) spans first so outer (comment) spans have no nested </span>
     html = html.replace(/<span class="entity[^"]*"[^>]*>([\s\S]*?)<\/span>/gi, '$1');
     html = html.replace(/<span class="comment">([\s\S]*?)<\/span>/gi, '$1');
-    // Strip heat map overlay spans so they never enter _rawContent
-    html = html.replace(/<span class="heat-s"[^>]*>([\s\S]*?)<\/span>/gi, '$1');
-    html = html.replace(/<span class="heat-w"[^>]*>([\s\S]*?)<\/span>/gi, '$1');
     return html;
   }
 
@@ -426,11 +468,12 @@
     var editor = document.getElementById('editor');
     var pos = getCaretOffset(editor);
     var raw = stripAllVisualSpans(editor.innerHTML);
-    var base = (_heatActive && _heatData) ? injectHeatOverlays(raw, _heatData) : raw;
-    var highlighted = applyCommentHighlighting(base);
+    var highlighted = applyCommentHighlighting(raw);
     highlighted = applyEntityHighlighting(highlighted);
     editor.innerHTML = highlighted;
     setCaretOffset(editor, pos);
+    // innerHTML replacement detaches the old ranges — rebuild them on the new nodes
+    renderAnnotations();
   }
 
   // ── Formatting commands ──────────────────────────────────────────────────────
@@ -476,239 +519,320 @@
     document.execCommand('insertText', false, text);
   });
 
-  // ── Note navigation: scroll to sentence ─────────────────────────────────────
-  // Called from C# after a note card click.  Finds the Nth sentence in the
-  // current scene content, selects it (gives the native browser flash-highlight),
-  // scrolls it into view, then clears the selection and places the cursor there
-  // after 2 seconds.
+  // ── Editorial annotations ────────────────────────────────────────────────────
+  // C# pushes { notes: [...], spans: [{ note, anchor, occ, offset, length, primary }] }.
+  // Each span is located by its anchor sentence (the exact sentence text C# analyzed,
+  // and which occurrence of it), then by the offset within that sentence — so the
+  // underline lands on the exact words. Painted via CSS.highlights: no DOM changes.
 
-  var _ABBREVS = /\b(mr|mrs|ms|dr|prof|sr|jr|st|ave|blvd|dept|est|vol|vs|etc|inc|ltd|corp|co|gen|gov|sgt|cpl|pvt|capt|lt|col|cmdr|adm|rev|hon|pres|sec|treas|amb)\.\s*$/i;
+  var _annData = null;          // last payload from C#
+  var _annVisible = true;       // toolbar toggle
+  var _annRanges = [];          // [{ note, range, primary }]
+  var _popNote = null;          // note shown in the popover
+  var _focusTimer = null;
 
-  // Strip HTML tags and decode entities to produce a plain-text string.
-  function plainFromRaw(html) {
-    return (html || '')
-      .replace(/<br\s*\/?>/gi, ' ')
-      .replace(/<\/?(p|div|li|h[1-6])[^>]*>/gi, ' ')
-      .replace(/<[^>]*>/g, '')
-      .replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&')
-      .replace(/&lt;/gi, '<').replace(/&gt;/gi, '>')
-      .replace(/&quot;/gi, '"').replace(/&#39;/gi, "'")
-      .replace(/\s+/g, ' ').trim();
+  var _HL_SUPPORTED = typeof CSS !== 'undefined' && !!CSS.highlights && typeof Highlight !== 'undefined';
+  var _HL_KEYS = ['aw-copy', 'aw-line', 'aw-dev'];
+
+  function setAnnotations(data) {
+    _annData = data || null;
+    hidePopover();
+    renderAnnotations();
+    return _annRanges.length;
   }
 
-  // Split plain text into sentences using the same boundary regex as C#'s
-  // NlpTextExtractor.SplitSentences: split on [.!?] followed by whitespace +
-  // uppercase / opening-quote, then merge abbreviation fragments.
-  function splitSentences(text) {
-    if (!text) return [];
-    var parts = text.split(/(?<=[.!?])\s+(?=[A-Z"\u201C])/);
-    var merged = [];
-    parts.forEach(function(p) {
-      var t = p.trim();
-      if (!t) return;
-      if (merged.length > 0 && _ABBREVS.test(merged[merged.length - 1])) {
-        merged[merged.length - 1] += ' ' + t;
-      } else {
-        merged.push(t);
-      }
-    });
-    return merged;
+  function setAnnotationsVisible(visible) {
+    _annVisible = !!visible;
+    if (!_annVisible) hidePopover();
+    renderAnnotations();
   }
 
-  // Walk the editor DOM using a TreeWalker, collect all text nodes, then find
-  // the target string and return a Range spanning it.
-  function findTextRange(root, target) {
-    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
-    var nodes = [], node;
-    while ((node = walker.nextNode())) nodes.push(node);
+  function clearAnnotations() {
+    _annData = null;
+    _annRanges = [];
+    hidePopover();
+    if (_HL_SUPPORTED) _HL_KEYS.forEach(function(k) { CSS.highlights.delete(k); });
+  }
 
-    // Flatten all text
-    var full = nodes.map(function(n) { return n.textContent; }).join('');
-    var t = target.replace(/\s+/g, ' ').trim();
-    var idx = full.indexOf(t);
+  // Builds a whitespace-normalized view of the editor's text with a map back to
+  // DOM positions. Mirrors the C# plain-text pipeline: comment spans are skipped,
+  // whitespace runs collapse to one space, block elements become '\n'.
+  function buildTextIndex(root) {
+    var text = [];
+    var map = [];               // per char: [node, offset], or null for virtual chars
+    var lastSpace = true;
 
-    // Fallback: try the first 80 chars (handles long sentences spanning many nodes)
-    if (idx === -1 && t.length > 80) {
-      t = t.substring(0, 80);
-      idx = full.indexOf(t);
+    function boundary() {
+      if (text.length && text[text.length - 1] !== '\n') { text.push('\n'); map.push(null); }
+      lastSpace = true;
     }
-    if (idx === -1) return null;
 
-    var range = document.createRange();
-    var pos = 0;
-    var end = idx + t.length;
-    var startSet = false, endSet = false;
-
-    for (var i = 0; i < nodes.length; i++) {
-      var len = nodes[i].textContent.length;
-      if (!startSet && pos + len > idx) {
-        try { range.setStart(nodes[i], idx - pos); startSet = true; } catch(e) {}
+    function walk(node) {
+      if (node.nodeType === 3) {
+        var v = node.nodeValue;
+        for (var i = 0; i < v.length; i++) {
+          var c = v[i];
+          if (c === ' ' || c === ' ' || c === '\t' || c === '\n' || c === '\r') {
+            if (!lastSpace) { text.push(' '); map.push([node, i]); lastSpace = true; }
+          } else {
+            text.push(c); map.push([node, i]); lastSpace = false;
+          }
+        }
+        return;
       }
-      if (startSet && !endSet && pos + len >= end) {
-        try { range.setEnd(nodes[i], end - pos); endSet = true; } catch(e) {}
-        break;
-      }
-      pos += len;
+      if (node.nodeType !== 1) return;
+      if (node.classList && node.classList.contains('comment')) return;
+      var block = node !== root && _isBlock(node);
+      if (block) boundary();
+      for (var k = 0; k < node.childNodes.length; k++) walk(node.childNodes[k]);
+      if (block) boundary();
     }
-    return (startSet && endSet) ? range : null;
+
+    walk(root);
+    return { text: text.join(''), map: map };
   }
 
-  function scrollToSentence(index) {
-    if (index < 0 || !_ready) return;
-    var plain     = plainFromRaw(_rawContent);
-    var sentences = splitSentences(plain);
-    if (index >= sentences.length) return;
-    var target = sentences[index].trim();
-    if (!target) return;
+  // Finds the occ-th standalone occurrence of a sentence: whitespace or a paragraph
+  // edge on both sides, which is how C# delimits sentences.
+  function findAnchor(index, anchor, occ) {
+    if (!anchor) return -1;
+    var text = index.text, from = 0, seen = 0, first = -1;
+    while (true) {
+      var at = text.indexOf(anchor, from);
+      if (at === -1) break;
+      var before = at > 0 ? text[at - 1] : ' ';
+      var afterIdx = at + anchor.length;
+      var after = afterIdx < text.length ? text[afterIdx] : ' ';
+      if ((before === ' ' || before === '\n') && (after === ' ' || after === '\n')) {
+        if (seen === occ) return at;
+        if (first === -1) first = at;
+        seen++;
+      }
+      from = at + 1;
+    }
+    return first;   // fewer copies than C# saw — best effort
+  }
 
-    var editor = document.getElementById('editor');
-    var range  = findTextRange(editor, target);
-    if (!range) return;
-
-    // Select the sentence — browser renders it with the native selection highlight
-    var sel = window.getSelection();
-    sel.removeAllRanges();
-    sel.addRange(range);
-
-    // Scroll the start of the sentence into the middle of the viewport
+  function rangeFor(index, start, length) {
+    if (start < 0 || length <= 0 || start + length > index.map.length) return null;
+    var a = index.map[start], b = index.map[start + length - 1];
+    if (!a || !b) return null;
     try {
-      var startNode = range.startContainer;
-      var el = startNode.nodeType === 3 ? startNode.parentElement : startNode;
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    } catch(e) {}
+      var r = document.createRange();
+      r.setStart(a[0], a[1]);
+      r.setEnd(b[0], b[1] + 1);
+      return r;
+    } catch (e) { return null; }
+  }
 
-    // After 2 s: collapse selection to start so the cursor lands at the sentence
-    setTimeout(function() {
+  function spanRange(index, span) {
+    var at = findAnchor(index, span.anchor, span.occ || 0);
+    if (at < 0) return null;
+    var offset = span.offset || 0;
+    var len = Math.min(span.length || 0, span.anchor.length - offset);
+    return rangeFor(index, at + offset, len);
+  }
+
+  function renderAnnotations() {
+    _annRanges = [];
+    if (!_HL_SUPPORTED) return;
+    _HL_KEYS.forEach(function(k) { CSS.highlights.delete(k); });
+    if (!_annVisible || !_annData || !_annData.spans || !_ready) return;
+
+    var index = buildTextIndex(document.getElementById('editor'));
+    var groups = { copy: [], line: [], dev: [] };
+
+    _annData.spans.forEach(function(span) {
+      var note = _annData.notes[span.note];
+      if (!note || note._gone) return;
+      var r = spanRange(index, span);
+      if (!r) return;
+      _annRanges.push({ note: note, range: r, primary: !!span.primary });
+      (groups[note.category] || groups.dev).push(r);
+    });
+
+    if (groups.copy.length) CSS.highlights.set('aw-copy', new Highlight(...groups.copy));
+    if (groups.line.length) CSS.highlights.set('aw-line', new Highlight(...groups.line));
+    if (groups.dev.length)  CSS.highlights.set('aw-dev',  new Highlight(...groups.dev));
+  }
+
+  // Annotation under a DOM point — the smallest range wins when they overlap.
+  function annotationAt(node, offset) {
+    var best = null, bestLen = Infinity;
+    for (var i = 0; i < _annRanges.length; i++) {
+      var a = _annRanges[i];
       try {
-        var r2 = range.cloneRange();
-        r2.collapse(true);
-        var s2 = window.getSelection();
-        s2.removeAllRanges();
-        s2.addRange(r2);
-        editor.focus();
-      } catch(e) {}
-    }, 2000);
+        if (!a.range.isPointInRange(node, offset)) continue;
+      } catch (e) { continue; }
+      var len = a.range.toString().length;
+      if (len < bestLen) { best = a; bestLen = len; }
+    }
+    return best;
   }
 
-  // ── Heat Map overlay ─────────────────────────────────────────────────────────
-  // Sentence-level prose overlay driven by NLP analysis results.
-  // applyHeatMap(data) / clearHeatMap() called from C# via EvaluateJavaScriptAsync.
-  // Heat spans are stripped by stripAllVisualSpans so _rawContent stays clean.
-
-  var _heatActive = false;
-  var _heatData   = null;
-
-  // Count sentences in plain text using terminal-punctuation heuristic.
-  function countSentencesInText(text) {
-    if (!text || !text.trim()) return 0;
-    var endings = text.match(/[.!?]+(?:\s+[A-Z]|$)/g) || [];
-    return endings.length > 0 ? endings.length : 1;
+  function primaryRange(note) {
+    for (var i = 0; i < _annRanges.length; i++)
+      if (_annRanges[i].note === note && _annRanges[i].primary) return _annRanges[i].range;
+    return null;
   }
 
-  // Build combined CSS style string from an array of heat flag names.
-  // Border-left flags are mutually exclusive (passive wins over adverbs/complex).
-  function buildHeatStyle(flags) {
-    var border = '';
-    var bg     = '';
-    var td     = '';
-    flags.forEach(function(f) {
-      if      (f === 'passive'        && !border) border = 'border-left:3px solid rgba(224,108,117,0.65);padding-left:6px;margin-left:-6px;';
-      else if (f === 'adverbs'        && !border) border = 'border-left:3px solid rgba(229,192,123,0.65);padding-left:6px;margin-left:-6px;';
-      else if (f === 'complex'        && !border) border = 'border-left:3px solid rgba(130,170,255,0.45);padding-left:6px;margin-left:-6px;';
-      if      (f === 'show-dont-tell')            bg     = 'background:rgba(209,154,102,0.09);';
-      if      (f === 'long')                      td     = 'text-decoration:underline dotted rgba(229,229,100,0.75);';
-    });
-    return border + bg + td;
+  // ── Popover ──────────────────────────────────────────────────────────────────
+
+  var _CAT_COLORS = { copy: '#61AFEF', line: '#E5C07B', dev: '#C678DD' };
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  // Walk an HTML string and highlight echo words in text segments only.
-  function highlightEchoWords(html, words) {
-    if (!words || !words.length) return html;
-    var out = '';
-    var i = 0;
-    while (i < html.length) {
-      if (html[i] === '<') {
-        var end = html.indexOf('>', i);
-        if (end === -1) { out += html.slice(i); break; }
-        out += html.slice(i, end + 1);
-        i = end + 1;
-        continue;
-      }
-      var segEnd = html.indexOf('<', i);
-      if (segEnd === -1) segEnd = html.length;
-      var seg = html.slice(i, segEnd);
-      words.forEach(function(w) {
-        if (!w || w.length < 3) return;
-        var esc = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        seg = seg.replace(
-          new RegExp('\\b' + esc + '\\b', 'gi'),
-          '<span class="heat-w" style="font-weight:bold;color:rgba(229,192,123,0.92);">$&</span>'
-        );
+  function showPopover(ann) {
+    var pop = document.getElementById('aw-pop');
+    var note = ann.note;
+    _popNote = note;
+
+    var html = '<div class="aw-head"><span class="aw-dot" style="background:' + (_CAT_COLORS[note.category] || '#888') + '"></span>'
+             + '<span class="aw-title">' + escapeHtml(note.title) + '</span></div>'
+             + '<div class="aw-msg">' + escapeHtml(note.message) + '</div>';
+
+    if (note.suggestions && note.suggestions.length) {
+      html += '<div class="aw-sugg">';
+      note.suggestions.slice(0, 4).forEach(function(s, i) {
+        html += '<button data-sugg="' + i + '" title="Replace with this">' + escapeHtml(s) + '</button>';
       });
-      out += seg;
-      i = segEnd;
+      html += '</div>';
     }
-    return out;
+
+    html += '<div class="aw-actions">'
+          + '<button data-act="dismiss" title="Hide this note">Ignore</button>'
+          + '<button data-act="disable-scene" title="Stop flagging this rule in the current scene">Off in scene</button>'
+          + '<button data-act="disable-rule" title="Turn this rule off for the whole book">Turn rule off</button>';
+    if (note.canAllowWord && note.evidence)
+      html += '<button data-act="allow-word" title="Never flag this word in this book">Allow “' + escapeHtml(note.evidence) + '”</button>';
+    html += '</div>';
+
+    pop.innerHTML = html;
+    pop.classList.add('open');
+
+    // Position under the clicked words, flipping above when near the bottom
+    var rect = ann.range.getBoundingClientRect();
+    var pw = pop.offsetWidth, ph = pop.offsetHeight;
+    var left = Math.max(8, Math.min(rect.left, window.innerWidth - pw - 8));
+    var top = rect.bottom + 6;
+    if (top + ph > window.innerHeight - 8) top = Math.max(8, rect.top - ph - 6);
+    pop.style.left = left + 'px';
+    pop.style.top = top + 'px';
   }
 
-  // Inject heat overlay spans into raw HTML (no visual spans present).
-  // Operates at paragraph granularity: wraps each <p>'s inner content with
-  // a display:block span when any sentence in that paragraph is flagged.
-  function injectHeatOverlays(rawHtml, data) {
-    if (!data) return rawHtml;
+  function hidePopover() {
+    _popNote = null;
+    var pop = document.getElementById('aw-pop');
+    if (pop) pop.classList.remove('open');
+  }
 
-    var flagsMap = {};
-    (data.sentences || []).forEach(function(s) {
-      if (s.flags && s.flags.length > 0) flagsMap[s.index] = s.flags;
-    });
-    var echoWords = data.echoWords || [];
-    var hasFlags  = Object.keys(flagsMap).length > 0;
-    var hasEchoes = echoWords.length > 0;
-    if (!hasFlags && !hasEchoes) return rawHtml;
+  function retireNote(note) {
+    note._gone = true;
+    hidePopover();
+    renderAnnotations();
+  }
 
-    var sentIdx = 0;
-    var result  = rawHtml;
+  // Keep the editor's selection while clicking popover buttons
+  document.getElementById('aw-pop').addEventListener('mousedown', function(e) { e.preventDefault(); });
 
-    // Wrap flagged paragraphs — accumulate all flags for sentences it contains.
-    result = result.replace(/(<p(?:\s[^>]*)?>)([\s\S]*?)(<\/p>)/gi, function(m, open, inner, close) {
-      var plain = inner.replace(/<[^>]*>/g, '').replace(/&[a-z#0-9]+;/gi, ' ');
-      var count = Math.max(1, countSentencesInText(plain));
+  document.getElementById('aw-pop').addEventListener('click', function(e) {
+    var btn = e.target.closest('button');
+    if (!btn || !_popNote) return;
+    var note = _popNote;
 
-      var combinedFlags = [];
-      for (var i = 0; i < count; i++) {
-        var f = flagsMap[sentIdx + i];
-        if (f) Array.prototype.push.apply(combinedFlags, f);
+    if (btn.hasAttribute('data-sugg')) {
+      var replacement = note.suggestions[+btn.getAttribute('data-sugg')];
+      var r = primaryRange(note);
+      if (r && replacement != null) {
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(r);
+        document.execCommand('insertText', false, replacement);   // fires input → save + re-analysis
       }
-      sentIdx += count;
-
-      if (combinedFlags.length === 0) return m;
-      var style = buildHeatStyle(combinedFlags);
-      return open + '<span class="heat-s" style="display:block;' + style + '">' + inner + '</span>' + close;
-    });
-
-    if (hasEchoes) {
-      result = highlightEchoWords(result, echoWords);
+      retireNote(note);
+      return;
     }
 
-    return result;
-  }
+    var act = btn.getAttribute('data-act');
+    if (!act) return;
+    window.location.href = 'alphawriter://noteAction?action=' + encodeURIComponent(act)
+      + '&fp=' + encodeURIComponent(note.fingerprint || '')
+      + '&rule=' + encodeURIComponent(note.ruleId || '')
+      + '&word=' + encodeURIComponent(act === 'allow-word' ? (note.evidence || '') : '')
+      + '&t=' + Date.now();
+    retireNote(note);
+  });
 
-  function applyHeatMap(data) {
-    _heatActive = true;
-    _heatData   = data;
-    var editor  = document.getElementById('editor');
-    var pos     = getCaretOffset(editor);
-    var withHeat    = injectHeatOverlays(_rawContent, data);
-    var highlighted = applyCommentHighlighting(withHeat);
-    highlighted     = applyEntityHighlighting(highlighted);
-    editor.innerHTML = highlighted;
-    setCaretOffset(editor, pos);
-  }
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') hidePopover();
 
-  function clearHeatMap() {
-    _heatActive = false;
-    _heatData   = null;
-    refreshHighlighting();
+    // App shortcuts. The WebView owns the keyboard while the author types, so the
+    // window never sees these — forward them to C# (WriterPage.OnEditorNavigating).
+    if (e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey) {
+      var k = /^[1-5]$/.test(e.key) ? e.key : (e.key === '\\' ? 'sidebar' : null);
+      if (k) {
+        e.preventDefault();
+        window.location.href = 'alphawriter://shortcut?k=' + k + '&t=' + Date.now();
+      }
+    }
+  });
+  document.getElementById('editor').addEventListener('scroll', hidePopover);
+  document.getElementById('editor').addEventListener('input', hidePopover);
+
+  // Clicking inside underlined words opens their popover
+  document.getElementById('editor').addEventListener('click', function(e) {
+    if (!_annVisible || _annRanges.length === 0) return;
+    if (e.target.closest && e.target.closest('.entity')) return;
+    var sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || !sel.isCollapsed) { hidePopover(); return; }
+    var r = sel.getRangeAt(0);
+    var ann = annotationAt(r.startContainer, r.startOffset);
+    if (ann) showPopover(ann); else hidePopover();
+  });
+
+  // ── Focus (note card / report navigation) ────────────────────────────────────
+  // target: { fingerprint, anchor, occ, offset, length }
+
+  function focusAnnotation(target) {
+    if (!target || !_ready) return false;
+    var r = null;
+
+    if (target.fingerprint) {
+      for (var i = 0; i < _annRanges.length && !r; i++)
+        if (_annRanges[i].primary && _annRanges[i].note.fingerprint === target.fingerprint)
+          r = _annRanges[i].range;
+    }
+    if (!r && target.anchor) {
+      var index = buildTextIndex(document.getElementById('editor'));
+      r = spanRange(index, { anchor: target.anchor, occ: target.occ || 0,
+                             offset: target.offset || 0, length: target.length || target.anchor.length });
+    }
+    if (!r) return false;
+
+    try {
+      var node = r.startContainer.nodeType === 3 ? r.startContainer.parentElement : r.startContainer;
+      if (node) node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } catch (e) {}
+
+    if (_HL_SUPPORTED) {
+      CSS.highlights.set('aw-focus', new Highlight(r));
+      clearTimeout(_focusTimer);
+      _focusTimer = setTimeout(function() { CSS.highlights.delete('aw-focus'); }, 2200);
+    }
+
+    // Leave the caret at the start of the flagged words
+    try {
+      var caret = r.cloneRange();
+      caret.collapse(true);
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(caret);
+      document.getElementById('editor').focus({ preventScroll: true });
+    } catch (e) {}
+    return true;
   }
 
   // Entity click → notify C# with entity id and type

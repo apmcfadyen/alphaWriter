@@ -103,6 +103,9 @@ namespace alphaWriter.Models
         /// </summary>
         public Dictionary<string, int> DailyWordSnapshots { get; set; } = new();
 
+        /// <summary>Editorial preferences: enabled rules, genre, allowed words, dismissed notes.</summary>
+        public EditorialStyleSheet StyleSheet { get; set; } = new();
+
         public int WordCount => Chapters.Sum(c => c.WordCount);
 
         public bool HasWordTarget => WordTarget > 0;

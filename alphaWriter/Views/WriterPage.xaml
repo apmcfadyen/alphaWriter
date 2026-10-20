@@ -7,458 +7,74 @@
     xmlns:analysis="clr-namespace:alphaWriter.Models.Analysis"
     xmlns:vm="clr-namespace:alphaWriter.ViewModels"
     xmlns:converters="clr-namespace:alphaWriter.Converters"
+    xmlns:shell="clr-namespace:alphaWriter.Views.Shell"
+    xmlns:workspaces="clr-namespace:alphaWriter.Views.Workspaces"
     x:Name="Page"
     Title="alphaWriter"
     Shell.NavBarIsVisible="False">
 
     <!--
-        3-column layout:
-          Col 0 (Auto) Chapters panel (full height, collapsible)
-          Col 1 (2)    Divider
-          Col 2 (*)    Editor (top) + splitter + Scenes (bottom)
-        Auto columns collapse to 0 when IsVisible=False.
+        Frame:
+          Col 0  Workspace rail (always visible — which job am I doing?)
+          Col 1  Sidebar of the active workspace (outline / story bible / insights)
+          Col 2  Divider
+          Col 3  Main area of the active workspace
+          Col 4  Scene inspector (Write only)
+          Row 1  Status bar (counts, save state, analysis freshness)
+        Auto columns collapse to 0 when their content is hidden.
     -->
-    <Grid>
+    <Grid RowDefinitions="*,Auto">
+    <Grid Grid.Row="0">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto" />
-            <ColumnDefinition Width="2" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="Auto" />
             <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
 
-        <!-- ── LEFT PANEL: Chapters (full height) ──────────────────────── -->
-        <Grid Grid.Column="0"
-              WidthRequest="200"
+        <shell:WorkspaceRail Grid.Row="0" Grid.Column="0" />
+
+        <!-- ── SIDEBAR: navigator for the active workspace ──────────────── -->
+        <Grid Grid.Column="1"
+              x:Name="SidebarHost"
+              WidthRequest="260"
               BackgroundColor="{StaticResource SurfaceMid}"
-              IsVisible="{Binding IsSidebarVisible}"
-              RowDefinitions="Auto,Auto,*">
+              IsVisible="{Binding IsSidebarHostVisible}"
+              RowDefinitions="Auto,*">
 
-            <!-- Book selector row -->
-            <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto,Auto" Padding="4,4,4,0">
-                <Button Grid.Column="0"
-                        Text="{Binding CurrentBookTitle}"
-                        Style="{StaticResource BookSelectorButton}"
-                        Command="{Binding SwitchBookCommand}"
-                        ToolTipProperties.Text="Switch book" />
-                <Button Grid.Column="1" Text="∑"
-                        Style="{StaticResource IconButton}"
-                        Command="{Binding ShowStatisticsCommand}"
-                        IsEnabled="{Binding HasSelectedBook}"
-                        ToolTipProperties.Text="Writing statistics" />
-                <Button Grid.Column="2" Text="◈"
-                        Style="{StaticResource IconButton}"
-                        Command="{Binding ShowReportsCommand}"
-                        IsEnabled="{Binding HasSelectedBook}"
-                        ToolTipProperties.Text="Entity relationship report" />
-                <Button Grid.Column="3" Text="ℹ"
-                        Style="{StaticResource IconButton}"
-                        Command="{Binding ShowBookInfoCommand}"
-                        IsEnabled="{Binding HasSelectedBook}"
-                        ToolTipProperties.Text="Book info &amp; settings" />
-                <Button Grid.Column="4" Text="..."
-                        Style="{StaticResource IconButton}"
-                        Command="{Binding ManageBooksCommand}"
-                        ToolTipProperties.Text="Manage books" />
-            </Grid>
+            <!-- Write: the whole book as one outline -->
+            <workspaces:OutlineView Grid.Row="0" Grid.RowSpan="2" IsVisible="{Binding IsWriteWorkspace}" />
 
-            <!-- Sidebar tab strip -->
-            <Grid Grid.Row="1" ColumnDefinitions="*,*,*,*" Padding="4,4,4,0">
-                <Button Grid.Column="0" Text="Ch"
-                        Style="{StaticResource SidebarTabButton}"
-                        Command="{Binding SetSidebarModeCommand}"
-                        CommandParameter="Chapters"
-                        ToolTipProperties.Text="Chapters" />
-                <Button Grid.Column="1" Text="Cr"
-                        Style="{StaticResource SidebarTabButton}"
-                        Command="{Binding SetSidebarModeCommand}"
-                        CommandParameter="Characters"
-                        ToolTipProperties.Text="Characters" />
-                <Button Grid.Column="2" Text="Lc"
-                        Style="{StaticResource SidebarTabButton}"
-                        Command="{Binding SetSidebarModeCommand}"
-                        CommandParameter="Locations"
-                        ToolTipProperties.Text="Locations" />
-                <Button Grid.Column="3" Text="It"
-                        Style="{StaticResource SidebarTabButton}"
-                        Command="{Binding SetSidebarModeCommand}"
-                        CommandParameter="Items"
-                        ToolTipProperties.Text="Items" />
-            </Grid>
+            <!-- Insights: every statistic and report -->
+            <workspaces:InsightsSidebar Grid.Row="0" Grid.RowSpan="2" IsVisible="{Binding IsInsightsWorkspace}" />
 
-            <!-- ── Chapters panel ── -->
-            <Grid Grid.Row="2" IsVisible="{Binding IsChaptersMode}" RowDefinitions="Auto,*,Auto">
-                <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Padding="0,4,4,0">
-                    <Label Grid.Column="0" Text="CHAPTERS" Style="{StaticResource PanelHeaderLabel}" />
-                    <Button Grid.Column="1" Text="+"
-                            Style="{StaticResource IconButton}"
-                            Command="{Binding AddChapterCommand}"
-                            IsEnabled="{Binding HasSelectedBook}"
-                            ToolTipProperties.Text="Add chapter" />
-                </Grid>
-                <CollectionView Grid.Row="1"
-                                ItemsSource="{Binding SelectedBook.Chapters}"
-                                SelectionMode="Single"
-                                SelectedItem="{Binding SelectedChapter}">
-                    <CollectionView.ItemTemplate>
-                        <DataTemplate x:DataType="models:Chapter">
-                            <Grid ColumnDefinitions="Auto,*,Auto,Auto"
-                                  RowDefinitions="Auto,Auto,Auto"
-                                  BackgroundColor="Transparent"
-                                  Padding="0,1">
-                                <Grid.GestureRecognizers>
-                                    <TapGestureRecognizer
-                                        NumberOfTapsRequired="2"
-                                        Command="{Binding Source={x:Reference Page}, Path=BindingContext.RenameChapterCommand}"
-                                        CommandParameter="{Binding .}" />
-                                    <DropGestureRecognizer AllowDrop="True"
-                                        DragOver="OnChapterDragOver"
-                                        DragLeave="OnChapterDragLeave"
-                                        Drop="OnChapterDrop" />
-                                </Grid.GestureRecognizers>
-                                <BoxView Grid.Row="0" Grid.ColumnSpan="4"
-                                         HeightRequest="2" IsVisible="False"
-                                         BackgroundColor="{StaticResource AccentPrimary}" />
-                                <Label Grid.Row="1" Grid.Column="0"
-                                       Style="{StaticResource DragHandleLabel}">
-                                    <Label.GestureRecognizers>
-                                        <DragGestureRecognizer CanDrag="True"
-                                            DragStarting="OnChapterDragStarting"
-                                            DropCompleted="OnChapterDragCompleted" />
-                                    </Label.GestureRecognizers>
-                                </Label>
-                                <Label Grid.Row="1" Grid.Column="1"
-                                       Text="{Binding Title}"
-                                       Style="{StaticResource ListItemLabel}"
-                                       LineBreakMode="TailTruncation" />
-                                <Label Grid.Row="1" Grid.Column="2"
-                                       Text="{Binding WordCount, StringFormat='{0}w'}"
-                                       Style="{StaticResource WordCountLabel}" />
-                                <Button Grid.Row="1" Grid.Column="3" Text="×"
-                                        Style="{StaticResource DangerIconButton}"
-                                        Command="{Binding Source={x:Reference Page}, Path=BindingContext.DeleteChapterCommand}"
-                                        CommandParameter="{Binding .}" />
-                                <BoxView Grid.Row="2" Grid.ColumnSpan="4"
-                                         HeightRequest="2" IsVisible="False"
-                                         BackgroundColor="{StaticResource AccentPrimary}" />
-                            </Grid>
-                        </DataTemplate>
-                    </CollectionView.ItemTemplate>
-                </CollectionView>
-                <!-- Book word count total + optional progress bar -->
-                <Border Grid.Row="2"
-                        BackgroundColor="{StaticResource SurfaceDeep}"
-                        StrokeThickness="0"
-                        Padding="8,6">
-                    <VerticalStackLayout Spacing="4">
-                        <Label Text="{Binding SelectedBook.WordCountSummary}"
-                               Style="{StaticResource WordCountLabel}"
-                               HorizontalOptions="Center" />
-                        <ProgressBar Progress="{Binding SelectedBook.WordCountProgress}"
-                                     IsVisible="{Binding SelectedBook.HasWordTarget}"
-                                     ProgressColor="{StaticResource AccentPrimary}"
-                                     BackgroundColor="{StaticResource SurfaceRaised}"
-                                     HeightRequest="4" />
-                    </VerticalStackLayout>
-                </Border>
-            </Grid>
 
-            <!-- ── Characters panel ── -->
-            <Grid Grid.Row="2" IsVisible="{Binding IsCharactersMode}" RowDefinitions="Auto,Auto,*">
-                <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" Padding="0,4,4,0">
-                    <Label Grid.Column="0" Text="CHARACTERS" Style="{StaticResource PanelHeaderLabel}" />
-                    <Button Grid.Column="1" Text="⟳"
-                            Style="{StaticResource IconButton}"
-                            Command="{Binding ScanEntitiesCommand}"
-                            IsEnabled="{Binding HasSelectedBook}"
-                            ToolTipProperties.Text="Scan book for characters" />
-                    <Button Grid.Column="2" Text="+"
-                            Style="{StaticResource IconButton}"
-                            Command="{Binding AddCharacterCommand}"
-                            IsEnabled="{Binding HasSelectedBook}"
-                            ToolTipProperties.Text="Add character" />
-                </Grid>
-                <!-- NER scan results -->
-                <Grid Grid.Row="1" RowDefinitions="Auto,Auto,Auto">
-                    <ActivityIndicator Grid.Row="0"
-                                       IsRunning="{Binding IsScanning}"
-                                       IsVisible="{Binding IsScanning}"
-                                       HorizontalOptions="Center"
-                                       Margin="0,4" />
-                    <Grid Grid.Row="1" IsVisible="{Binding HasCharacterCandidates}" RowDefinitions="Auto,Auto,Auto">
-                        <Label Grid.Row="0" Text="FOUND IN BOOK"
-                               Style="{StaticResource PanelHeaderLabel}"
-                               Margin="4,4,0,2" />
-                        <CollectionView Grid.Row="1"
-                                        ItemsSource="{Binding CharacterCandidates}"
-                                        MaximumHeightRequest="180">
-                            <CollectionView.ItemTemplate>
-                                <DataTemplate x:DataType="vm:NerCandidateViewModel">
-                                    <Grid ColumnDefinitions="Auto,*,Auto" Padding="0,1">
-                                        <CheckBox Grid.Column="0"
-                                                  IsChecked="{Binding IsSelected}"
-                                                  VerticalOptions="Center"
-                                                  Margin="0,0,-85,0" />
-                                        <Label Grid.Column="1"
-                                               Text="{Binding Name}"
-                                               Style="{StaticResource ListItemLabel}"
-                                               LineBreakMode="TailTruncation"
-                                               VerticalOptions="Center"
-                                               Margin="0,0,0,0" />
-                                        <Label Grid.Column="2"
-                                               Text="{Binding CountLabel}"
-                                               FontSize="11"
-                                               TextColor="{StaticResource TextSecondary}"
-                                               VerticalOptions="Center"
-                                               Margin="2,0,4,0" />
-                                    </Grid>
-                                </DataTemplate>
-                            </CollectionView.ItemTemplate>
-                        </CollectionView>
-                        <Button Grid.Row="2"
-                                Text="Add Checked"
-                                Command="{Binding AddCheckedCharactersCommand}"
-                                HorizontalOptions="End"
-                                Margin="0,2,4,4"
-                                Style="{StaticResource IconButton}" />
-                    </Grid>
-                    <Label Grid.Row="2"
-                           Text="{Binding ScanProgress}"
-                           IsVisible="{Binding HasScanProgress}"
-                           FontSize="11"
-                           TextColor="{StaticResource TextSecondary}"
-                           LineBreakMode="WordWrap"
-                           Margin="4,2,4,4" />
-                </Grid>
-                <CollectionView Grid.Row="2"
-                                ItemsSource="{Binding SelectedBook.Characters}"
-                                SelectionMode="Single"
-                                SelectedItem="{Binding SelectedCharacter}">
-                    <CollectionView.ItemTemplate>
-                        <DataTemplate x:DataType="models:Character">
-                            <Grid ColumnDefinitions="*,Auto"
-                                  BackgroundColor="Transparent"
-                                  Padding="4,1">
-                                <Grid.GestureRecognizers>
-                                    <TapGestureRecognizer
-                                        NumberOfTapsRequired="2"
-                                        Command="{Binding Source={x:Reference Page}, Path=BindingContext.RenameCharacterCommand}"
-                                        CommandParameter="{Binding .}" />
-                                </Grid.GestureRecognizers>
-                                <Label Grid.Column="0"
-                                       Text="{Binding Name}"
-                                       Style="{StaticResource ListItemLabel}"
-                                       LineBreakMode="TailTruncation" />
-                                <Button Grid.Column="1" Text="×"
-                                        Style="{StaticResource DangerIconButton}"
-                                        Command="{Binding Source={x:Reference Page}, Path=BindingContext.DeleteCharacterCommand}"
-                                        CommandParameter="{Binding .}" />
-                            </Grid>
-                        </DataTemplate>
-                    </CollectionView.ItemTemplate>
-                </CollectionView>
-            </Grid>
+            <!-- Revise: run analysis, then walk the notes -->
+            <workspaces:ReviseSidebar Grid.Row="0" Grid.RowSpan="2" IsVisible="{Binding IsReviseWorkspace}" />
 
-            <!-- ── Locations panel ── -->
-            <Grid Grid.Row="2" IsVisible="{Binding IsLocationsMode}" RowDefinitions="Auto,Auto,*">
-                <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" Padding="0,4,4,0">
-                    <Label Grid.Column="0" Text="LOCATIONS" Style="{StaticResource PanelHeaderLabel}" />
-                    <Button Grid.Column="1" Text="⟳"
-                            Style="{StaticResource IconButton}"
-                            Command="{Binding ScanEntitiesCommand}"
-                            IsEnabled="{Binding HasSelectedBook}"
-                            ToolTipProperties.Text="Scan book for locations" />
-                    <Button Grid.Column="2" Text="+"
-                            Style="{StaticResource IconButton}"
-                            Command="{Binding AddLocationCommand}"
-                            IsEnabled="{Binding HasSelectedBook}"
-                            ToolTipProperties.Text="Add location" />
-                </Grid>
-                <!-- NER scan results -->
-                <Grid Grid.Row="1" RowDefinitions="Auto,Auto,Auto">
-                    <ActivityIndicator Grid.Row="0"
-                                       IsRunning="{Binding IsScanning}"
-                                       IsVisible="{Binding IsScanning}"
-                                       HorizontalOptions="Center"
-                                       Margin="0,4" />
-                    <Grid Grid.Row="1" IsVisible="{Binding HasLocationCandidates}" RowDefinitions="Auto,Auto,Auto">
-                        <Label Grid.Row="0" Text="FOUND IN BOOK"
-                               Style="{StaticResource PanelHeaderLabel}"
-                               Margin="4,4,0,2" />
-                        <CollectionView Grid.Row="1"
-                                        ItemsSource="{Binding LocationCandidates}"
-                                        MaximumHeightRequest="180">
-                            <CollectionView.ItemTemplate>
-                                <DataTemplate x:DataType="vm:NerCandidateViewModel">
-                                    <Grid ColumnDefinitions="Auto,*,Auto" Padding="0,1">
-                                        <CheckBox Grid.Column="0"
-                                                  IsChecked="{Binding IsSelected}"
-                                                  VerticalOptions="Center"
-                                                  Margin="0,0,-85,0" />
-                                        <Label Grid.Column="1"
-                                               Text="{Binding Name}"
-                                               Style="{StaticResource ListItemLabel}"
-                                               LineBreakMode="TailTruncation"
-                                               VerticalOptions="Center"
-                                               Margin="0,0,0,0" />
-                                        <Label Grid.Column="2"
-                                               Text="{Binding CountLabel}"
-                                               FontSize="11"
-                                               TextColor="{StaticResource TextSecondary}"
-                                               VerticalOptions="Center"
-                                               Margin="2,0,4,0" />
-                                    </Grid>
-                                </DataTemplate>
-                            </CollectionView.ItemTemplate>
-                        </CollectionView>
-                        <Button Grid.Row="2"
-                                Text="Add Checked"
-                                Command="{Binding AddCheckedLocationsCommand}"
-                                HorizontalOptions="End"
-                                Margin="0,2,4,4"
-                                Style="{StaticResource IconButton}" />
-                    </Grid>
-                    <Label Grid.Row="2"
-                           Text="{Binding ScanProgress}"
-                           IsVisible="{Binding HasScanProgress}"
-                           FontSize="11"
-                           TextColor="{StaticResource TextSecondary}"
-                           LineBreakMode="WordWrap"
-                           Margin="4,2,4,4" />
-                </Grid>
-                <CollectionView Grid.Row="2"
-                                ItemsSource="{Binding SelectedBook.Locations}"
-                                SelectionMode="Single"
-                                SelectedItem="{Binding SelectedLocation}">
-                    <CollectionView.ItemTemplate>
-                        <DataTemplate x:DataType="models:Location">
-                            <Grid ColumnDefinitions="*,Auto"
-                                  BackgroundColor="Transparent"
-                                  Padding="4,1">
-                                <Grid.GestureRecognizers>
-                                    <TapGestureRecognizer
-                                        NumberOfTapsRequired="2"
-                                        Command="{Binding Source={x:Reference Page}, Path=BindingContext.RenameLocationCommand}"
-                                        CommandParameter="{Binding .}" />
-                                </Grid.GestureRecognizers>
-                                <Label Grid.Column="0"
-                                       Text="{Binding Name}"
-                                       Style="{StaticResource ListItemLabel}"
-                                       LineBreakMode="TailTruncation" />
-                                <Button Grid.Column="1" Text="×"
-                                        Style="{StaticResource DangerIconButton}"
-                                        Command="{Binding Source={x:Reference Page}, Path=BindingContext.DeleteLocationCommand}"
-                                        CommandParameter="{Binding .}" />
-                            </Grid>
-                        </DataTemplate>
-                    </CollectionView.ItemTemplate>
-                </CollectionView>
-            </Grid>
-
-            <!-- ── Items panel ── -->
-            <Grid Grid.Row="2" IsVisible="{Binding IsItemsMode}" RowDefinitions="Auto,Auto,*">
-                <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" Padding="0,4,4,0">
-                    <Label Grid.Column="0" Text="ITEMS" Style="{StaticResource PanelHeaderLabel}" />
-                    <Button Grid.Column="1" Text="⟳"
-                            Style="{StaticResource IconButton}"
-                            Command="{Binding ScanEntitiesCommand}"
-                            IsEnabled="{Binding HasSelectedBook}"
-                            ToolTipProperties.Text="Scan book for items" />
-                    <Button Grid.Column="2" Text="+"
-                            Style="{StaticResource IconButton}"
-                            Command="{Binding AddItemCommand}"
-                            IsEnabled="{Binding HasSelectedBook}"
-                            ToolTipProperties.Text="Add item" />
-                </Grid>
-                <!-- NER scan results -->
-                <Grid Grid.Row="1" RowDefinitions="Auto,Auto,Auto">
-                    <ActivityIndicator Grid.Row="0"
-                                       IsRunning="{Binding IsScanning}"
-                                       IsVisible="{Binding IsScanning}"
-                                       HorizontalOptions="Center"
-                                       Margin="0,4" />
-                    <Grid Grid.Row="1" IsVisible="{Binding HasItemCandidates}" RowDefinitions="Auto,Auto,Auto">
-                        <Label Grid.Row="0" Text="FOUND IN BOOK"
-                               Style="{StaticResource PanelHeaderLabel}"
-                               Margin="4,4,0,2" />
-                        <CollectionView Grid.Row="1"
-                                        ItemsSource="{Binding ItemCandidates}"
-                                        MaximumHeightRequest="180">
-                            <CollectionView.ItemTemplate>
-                                <DataTemplate x:DataType="vm:NerCandidateViewModel">
-                                    <Grid ColumnDefinitions="Auto,*,Auto" Padding="0,1">
-                                        <CheckBox Grid.Column="0"
-                                                  IsChecked="{Binding IsSelected}"
-                                                  VerticalOptions="Center"
-                                                  Margin="0,0,-85,0" />
-                                        <Label Grid.Column="1"
-                                               Text="{Binding Name}"
-                                               Style="{StaticResource ListItemLabel}"
-                                               LineBreakMode="TailTruncation"
-                                               VerticalOptions="Center"
-                                               Margin="0,0,0,0" />
-                                        <Label Grid.Column="2"
-                                               Text="{Binding CountLabel}"
-                                               FontSize="11"
-                                               TextColor="{StaticResource TextSecondary}"
-                                               VerticalOptions="Center"
-                                               Margin="2,0,4,0" />
-                                    </Grid>
-                                </DataTemplate>
-                            </CollectionView.ItemTemplate>
-                        </CollectionView>
-                        <Button Grid.Row="2"
-                                Text="Add Checked"
-                                Command="{Binding AddCheckedItemsCommand}"
-                                HorizontalOptions="End"
-                                Margin="0,2,4,4"
-                                Style="{StaticResource IconButton}" />
-                    </Grid>
-                    <Label Grid.Row="2"
-                           Text="{Binding ScanProgress}"
-                           IsVisible="{Binding HasScanProgress}"
-                           FontSize="11"
-                           TextColor="{StaticResource TextSecondary}"
-                           LineBreakMode="WordWrap"
-                           Margin="4,2,4,4" />
-                </Grid>
-                <CollectionView Grid.Row="2"
-                                ItemsSource="{Binding SelectedBook.Items}"
-                                SelectionMode="Single"
-                                SelectedItem="{Binding SelectedItem}">
-                    <CollectionView.ItemTemplate>
-                        <DataTemplate x:DataType="models:Item">
-                            <Grid ColumnDefinitions="*,Auto"
-                                  BackgroundColor="Transparent"
-                                  Padding="4,1">
-                                <Grid.GestureRecognizers>
-                                    <TapGestureRecognizer
-                                        NumberOfTapsRequired="2"
-                                        Command="{Binding Source={x:Reference Page}, Path=BindingContext.RenameItemCommand}"
-                                        CommandParameter="{Binding .}" />
-                                </Grid.GestureRecognizers>
-                                <Label Grid.Column="0"
-                                       Text="{Binding Name}"
-                                       Style="{StaticResource ListItemLabel}"
-                                       LineBreakMode="TailTruncation" />
-                                <Button Grid.Column="1" Text="×"
-                                        Style="{StaticResource DangerIconButton}"
-                                        Command="{Binding Source={x:Reference Page}, Path=BindingContext.DeleteItemCommand}"
-                                        CommandParameter="{Binding .}" />
-                            </Grid>
-                        </DataTemplate>
-                    </CollectionView.ItemTemplate>
-                </CollectionView>
-            </Grid>
+            <!-- Story Bible: cast, places, items -->
+            <workspaces:StoryBibleSidebar Grid.Row="0" Grid.RowSpan="2" IsVisible="{Binding IsStoryBibleWorkspace}" />
         </Grid>
 
-        <!-- Divider -->
-        <BoxView Grid.Column="1"
-                 Color="{StaticResource BorderSubtle}"
-                 IsVisible="{Binding IsSidebarVisible}" />
-
-        <!-- ── RIGHT PANEL: Editor (top) + Splitter + Scenes (bottom) ── -->
+        <!-- Divider: drag to resize the sidebar (the hit area is wider than the line) -->
         <Grid Grid.Column="2"
-              x:Name="EditorScenesGrid"
-              RowDefinitions="3*,Auto,*">
+              x:Name="SidebarResizer"
+              WidthRequest="7"
+              BackgroundColor="Transparent"
+              IsVisible="{Binding IsSidebarHostVisible}"
+              ToolTipProperties.Text="Drag to resize the sidebar"
+              SemanticProperties.Description="Sidebar resize handle">
+            <BoxView WidthRequest="1"
+                     HorizontalOptions="Start"
+                     Color="{StaticResource BorderSubtle}" />
+            <Grid.GestureRecognizers>
+                <PanGestureRecognizer PanUpdated="OnSidebarResizePan" />
+            </Grid.GestureRecognizers>
+        </Grid>
+
+        <!-- ── MAIN AREA: the active workspace's content ─────────────────── -->
+        <Grid Grid.Column="3" x:Name="MainArea">
 
             <!-- Scene editor area (visible when no story element is selected) -->
             <Grid Grid.Row="0"
@@ -466,52 +82,48 @@
                   BackgroundColor="{StaticResource EditorBackground}"
                   RowDefinitions="Auto,Auto,Auto,Auto,*">
 
-                <!-- Breadcrumb navigation -->
-                <ScrollView Grid.Row="0"
-                            Orientation="Horizontal"
-                            IsVisible="{Binding BreadcrumbItems.Count, Converter={StaticResource IsNotZeroConverter}}"
-                            Padding="8,4,8,0">
-                    <HorizontalStackLayout Spacing="2" Padding="0">
-                        <CollectionView ItemsSource="{Binding BreadcrumbItems}"
-                                        SelectionMode="None"
-                                        HeightRequest="24">
-                            <CollectionView.ItemsLayout>
-                                <LinearItemsLayout Orientation="Horizontal" ItemSpacing="0" />
-                            </CollectionView.ItemsLayout>
-                            <CollectionView.ItemTemplate>
-                                <DataTemplate x:DataType="vm:BreadcrumbItem">
-                                    <HorizontalStackLayout Spacing="2" VerticalOptions="Center">
-                                        <Button Text="{Binding Label}"
-                                                Command="{Binding Command}"
-                                                CommandParameter="{Binding Level}"
-                                                Style="{StaticResource BreadcrumbButton}"
-                                                IsEnabled="{Binding Command, Converter={StaticResource IsNotNullConverter}}"
-                                                FontSize="12"
-                                                Padding="6,2"
-                                                ToolTipProperties.Text="Navigate to this level" />
-                                        <Label Text="/"
-                                               IsVisible="{Binding Level, Converter={StaticResource IsNotSceneConverter}}"
-                                               TextColor="{StaticResource TextSecondary}"
-                                               FontSize="11"
-                                               Margin="0,0,0,1"
-                                               VerticalOptions="Center" />
-                                    </HorizontalStackLayout>
-                                </DataTemplate>
-                            </CollectionView.ItemTemplate>
-                        </CollectionView>
-                    </HorizontalStackLayout>
-                </ScrollView>
+                <!-- Breadcrumb: where you are in the book. Sizes to its text (never
+                     clipped); long titles end in an ellipsis with the full title as a tooltip. -->
+                <HorizontalStackLayout Grid.Row="0"
+                                       Padding="8,6,8,0"
+                                       Spacing="0"
+                                       IsVisible="{Binding BreadcrumbItems.Count, Converter={StaticResource IsNotZeroConverter}}"
+                                       BindableLayout.ItemsSource="{Binding BreadcrumbItems}">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="vm:BreadcrumbItem">
+                            <HorizontalStackLayout Spacing="0" VerticalOptions="Center">
+                                <Label Text="›"
+                                       IsVisible="{Binding ShowSeparator}"
+                                       TextColor="{StaticResource TextSecondary}"
+                                       FontSize="13"
+                                       Margin="2,0"
+                                       VerticalOptions="Center" />
+                                <Button Text="{Binding Label}"
+                                        IsVisible="{Binding IsLink}"
+                                        Command="{Binding Command}"
+                                        CommandParameter="{Binding Level}"
+                                        Style="{StaticResource BreadcrumbButton}"
+                                        ToolTipProperties.Text="{Binding Label}" />
+                                <Label Text="{Binding Label}"
+                                       IsVisible="{Binding IsCurrent}"
+                                       Style="{StaticResource BreadcrumbCurrentLabel}"
+                                       ToolTipProperties.Text="{Binding Label}" />
+                            </HorizontalStackLayout>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </HorizontalStackLayout>
 
                 <!-- Scene title + status row -->
                 <Grid Grid.Row="1"
                       ColumnDefinitions="*,Auto"
+                      IsVisible="{Binding HasSelectedScene}"
                       Padding="0">
                     <Entry Grid.Column="0"
                            Style="{StaticResource SceneTitleEntry}"
                            Text="{Binding SelectedScene.Title}"
-                           Placeholder="Select a scene to begin writing..."
-                           IsEnabled="{Binding HasSelectedScene}"
-                           Unfocused="OnSceneTitleUnfocused" />
+                           Placeholder="Untitled scene"
+                           Unfocused="OnSceneTitleUnfocused"
+                           SemanticProperties.Description="Scene title" />
                     <HorizontalStackLayout Grid.Column="1"
                                            Spacing="4" Padding="0,0,8,0"
                                            VerticalOptions="Center"
@@ -526,282 +138,60 @@
                     </HorizontalStackLayout>
                 </Grid>
 
-                <!-- Formatting toolbar -->
+                <!-- Editor toolbar: panel toggle · formatting · editorial marks · scene details -->
                 <Grid Grid.Row="2"
+                      IsVisible="{Binding HasSelectedScene}"
                       BackgroundColor="{StaticResource ToolbarBackground}"
-                      ColumnDefinitions="Auto,Auto,Auto,2,Auto,2,*,Auto,Auto"
+                      ColumnDefinitions="Auto,2,Auto,Auto,Auto,2,Auto,*,Auto,Auto"
                       Padding="4,2">
-                    <Button Grid.Column="0" Text="B"
+                    <Button Grid.Column="0" Text="☰"
+                            Style="{StaticResource IconButton}"
+                            Command="{Binding ToggleSidebarCommand}"
+                            ToolTipProperties.Text="Show or hide the sidebar (Ctrl+\)"
+                            SemanticProperties.Description="Toggle sidebar" />
+                    <BoxView Grid.Column="1"
+                             Color="{StaticResource BorderSubtle}"
+                             VerticalOptions="Center"
+                             HeightRequest="16" />
+                    <Button Grid.Column="2" Text="B"
                             Style="{StaticResource FormatButton}"
                             FontAttributes="Bold"
                             Clicked="OnBoldClicked"
                             IsEnabled="{Binding HasSelectedScene}"
-                            ToolTipProperties.Text="Bold" />
-                    <Button Grid.Column="1" Text="I"
+                            ToolTipProperties.Text="Bold (Ctrl+B)"
+                            SemanticProperties.Description="Bold" />
+                    <Button Grid.Column="3" Text="I"
                             Style="{StaticResource FormatButton}"
                             FontAttributes="Italic"
                             Clicked="OnItalicClicked"
                             IsEnabled="{Binding HasSelectedScene}"
-                            ToolTipProperties.Text="Italic" />
-                    <Button Grid.Column="2" Text="U"
+                            ToolTipProperties.Text="Italic (Ctrl+I)"
+                            SemanticProperties.Description="Italic" />
+                    <Button Grid.Column="4" Text="U"
                             Style="{StaticResource FormatButton}"
                             Clicked="OnUnderlineClicked"
                             IsEnabled="{Binding HasSelectedScene}"
-                            ToolTipProperties.Text="Underline" />
-                    <BoxView Grid.Column="3"
-                             Color="{StaticResource BorderSubtle}"
-                             VerticalOptions="Center"
-                             HeightRequest="16" />
-                    <Button Grid.Column="4" Text="◉"
-                            x:Name="HeatMapButton"
-                            Style="{StaticResource FormatButton}"
-                            Clicked="OnHeatMapClicked"
-                            IsEnabled="{Binding HasAnalysisResults}"
-                            ToolTipProperties.Text="Toggle prose heat map" />
+                            ToolTipProperties.Text="Underline (Ctrl+U)"
+                            SemanticProperties.Description="Underline" />
                     <BoxView Grid.Column="5"
                              Color="{StaticResource BorderSubtle}"
                              VerticalOptions="Center"
                              HeightRequest="16" />
-                    <Label Grid.Column="6"
-                           Text="{Binding WordCount, StringFormat='{0} words'}"
-                           Style="{StaticResource WordCountLabel}" />
-                    <Button Grid.Column="7" Text="..."
-                            Style="{StaticResource IconButton}"
+                    <Button Grid.Column="6" Text="Marks: on"
+                            x:Name="HeatMapButton"
+                            Style="{StaticResource ToolbarToggleButton}"
+                            Clicked="OnHeatMapClicked"
+                            ToolTipProperties.Text="Show or hide editorial marks. Click an underlined word for details."
+                            SemanticProperties.Description="Toggle editorial marks" />
+                    <Button Grid.Column="9" Text="Scene details"
+                            IsVisible="{Binding IsWriteWorkspace}"
+                            Style="{StaticResource ToolbarToggleButton}"
+                            BackgroundColor="{Binding IsMetadataPanelVisible, Converter={StaticResource SelectedTabConverter}}"
+                            TextColor="{Binding IsMetadataPanelVisible, Converter={StaticResource SelectedTabConverter}, ConverterParameter=text}"
                             Command="{Binding ToggleMetadataPanelCommand}"
                             IsEnabled="{Binding HasSelectedScene}"
-                            ToolTipProperties.Text="Toggle scene metadata" />
-                    <Button Grid.Column="8" Text="≡"
-                            Style="{StaticResource IconButton}"
-                            Command="{Binding ToggleSidebarCommand}"
-                            ToolTipProperties.Text="Toggle sidebar" />
+                            ToolTipProperties.Text="Status, viewpoint, cast, goal, conflict and outcome for this scene" />
                 </Grid>
-
-                <!-- Collapsible scene metadata panel -->
-                <Border Grid.Row="3"
-                        IsVisible="{Binding IsMetadataPanelVisible}"
-                        BackgroundColor="{StaticResource SurfaceMid}"
-                        StrokeThickness="0"
-                        Padding="12,8">
-                    <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
-                          ColumnDefinitions="Auto,*"
-                          RowSpacing="6" ColumnSpacing="10">
-
-                        <!-- Status -->
-                        <Label Grid.Row="0" Grid.Column="0"
-                               Text="Status" Style="{StaticResource FieldLabel}"
-                               VerticalOptions="Center" />
-                        <HorizontalStackLayout Grid.Row="0" Grid.Column="1" Spacing="4">
-                            <Button Text="Outline"
-                                    Style="{StaticResource MetadataChipButton}"
-                                    Command="{Binding SetSceneStatusCommand}"
-                                    CommandParameter="Outline"
-                                    ToolTipProperties.Text="Not counted towards word totals" />
-                            <Button Text="Draft"
-                                    Style="{StaticResource MetadataChipButton}"
-                                    Command="{Binding SetSceneStatusCommand}"
-                                    CommandParameter="Draft" />
-                            <Button Text="1st Edit"
-                                    Style="{StaticResource MetadataChipButton}"
-                                    Command="{Binding SetSceneStatusCommand}"
-                                    CommandParameter="FirstEdit" />
-                            <Button Text="2nd Edit"
-                                    Style="{StaticResource MetadataChipButton}"
-                                    Command="{Binding SetSceneStatusCommand}"
-                                    CommandParameter="SecondEdit" />
-                            <Button Text="Done"
-                                    Style="{StaticResource MetadataChipButton}"
-                                    Command="{Binding SetSceneStatusCommand}"
-                                    CommandParameter="Done" />
-                        </HorizontalStackLayout>
-
-                        <!-- Viewpoint characters -->
-                        <Label Grid.Row="1" Grid.Column="0"
-                               Text="Viewpoints" Style="{StaticResource FieldLabel}"
-                               VerticalOptions="Start" Margin="0,4,0,0" />
-                        <CollectionView Grid.Row="1" Grid.Column="1"
-                                        ItemsSource="{Binding ViewpointOptions}"
-                                        SelectionMode="None"
-                                        MaximumHeightRequest="120">
-                            <CollectionView.ItemsLayout>
-                                <LinearItemsLayout Orientation="Vertical" ItemSpacing="0" />
-                            </CollectionView.ItemsLayout>
-                            <CollectionView.ItemTemplate>
-                                <DataTemplate x:DataType="vm:ViewpointOption">
-                                    <HorizontalStackLayout Padding="0,1" Spacing="6">
-                                        <CheckBox IsChecked="{Binding IsSelected}"
-                                                  Color="{StaticResource AccentPrimary}"
-                                                  Scale="0.8"
-                                                  VerticalOptions="Center" />
-                                        <Label Text="{Binding Character.Name}"
-                                               TextColor="{StaticResource TextPrimary}"
-                                               FontSize="13"
-                                               VerticalOptions="Center" />
-                                    </HorizontalStackLayout>
-                                </DataTemplate>
-                            </CollectionView.ItemTemplate>
-                            <CollectionView.EmptyView>
-                                <Label Text="Add characters in the Cr tab first"
-                                       TextColor="{StaticResource TextDisabled}"
-                                       FontSize="12" FontAttributes="Italic" />
-                            </CollectionView.EmptyView>
-                        </CollectionView>
-
-                        <!-- Characters in scene -->
-                        <Label Grid.Row="2" Grid.Column="0"
-                               Text="Characters" Style="{StaticResource FieldLabel}"
-                               VerticalOptions="Start" Margin="0,4,0,0" />
-                        <CollectionView Grid.Row="2" Grid.Column="1"
-                                        ItemsSource="{Binding SceneCharacterOptions}"
-                                        SelectionMode="None"
-                                        MaximumHeightRequest="120">
-                            <CollectionView.ItemsLayout>
-                                <LinearItemsLayout Orientation="Vertical" ItemSpacing="0" />
-                            </CollectionView.ItemsLayout>
-                            <CollectionView.ItemTemplate>
-                                <DataTemplate x:DataType="vm:SceneEntityOption">
-                                    <HorizontalStackLayout Padding="0,1" Spacing="6">
-                                        <CheckBox IsChecked="{Binding IsSelected}"
-                                                  Color="#A89EC9"
-                                                  Scale="0.8"
-                                                  VerticalOptions="Center" />
-                                        <Label Text="{Binding Name}"
-                                               TextColor="{StaticResource TextPrimary}"
-                                               FontSize="13"
-                                               VerticalOptions="Center" />
-                                        <Label Text="auto"
-                                               IsVisible="{Binding IsAutoDetected}"
-                                               FontSize="10"
-                                               FontAttributes="Italic"
-                                               TextColor="#A89EC9"
-                                               VerticalOptions="Center" />
-                                    </HorizontalStackLayout>
-                                </DataTemplate>
-                            </CollectionView.ItemTemplate>
-                            <CollectionView.EmptyView>
-                                <Label Text="Add characters in the Cr tab first"
-                                       TextColor="{StaticResource TextDisabled}"
-                                       FontSize="12" FontAttributes="Italic" />
-                            </CollectionView.EmptyView>
-                        </CollectionView>
-
-                        <!-- Locations in scene -->
-                        <Label Grid.Row="3" Grid.Column="0"
-                               Text="Locations" Style="{StaticResource FieldLabel}"
-                               VerticalOptions="Start" Margin="0,4,0,0" />
-                        <CollectionView Grid.Row="3" Grid.Column="1"
-                                        ItemsSource="{Binding SceneLocationOptions}"
-                                        SelectionMode="None"
-                                        MaximumHeightRequest="120">
-                            <CollectionView.ItemsLayout>
-                                <LinearItemsLayout Orientation="Vertical" ItemSpacing="0" />
-                            </CollectionView.ItemsLayout>
-                            <CollectionView.ItemTemplate>
-                                <DataTemplate x:DataType="vm:SceneEntityOption">
-                                    <HorizontalStackLayout Padding="0,1" Spacing="6">
-                                        <CheckBox IsChecked="{Binding IsSelected}"
-                                                  Color="#7EC8A4"
-                                                  Scale="0.8"
-                                                  VerticalOptions="Center" />
-                                        <Label Text="{Binding Name}"
-                                               TextColor="{StaticResource TextPrimary}"
-                                               FontSize="13"
-                                               VerticalOptions="Center" />
-                                        <Label Text="auto"
-                                               IsVisible="{Binding IsAutoDetected}"
-                                               FontSize="10"
-                                               FontAttributes="Italic"
-                                               TextColor="#7EC8A4"
-                                               VerticalOptions="Center" />
-                                    </HorizontalStackLayout>
-                                </DataTemplate>
-                            </CollectionView.ItemTemplate>
-                            <CollectionView.EmptyView>
-                                <Label Text="Add locations in the Lc tab first"
-                                       TextColor="{StaticResource TextDisabled}"
-                                       FontSize="12" FontAttributes="Italic" />
-                            </CollectionView.EmptyView>
-                        </CollectionView>
-
-                        <!-- Items in scene -->
-                        <Label Grid.Row="4" Grid.Column="0"
-                               Text="Items" Style="{StaticResource FieldLabel}"
-                               VerticalOptions="Start" Margin="0,4,0,0" />
-                        <CollectionView Grid.Row="4" Grid.Column="1"
-                                        ItemsSource="{Binding SceneItemOptions}"
-                                        SelectionMode="None"
-                                        MaximumHeightRequest="120">
-                            <CollectionView.ItemsLayout>
-                                <LinearItemsLayout Orientation="Vertical" ItemSpacing="0" />
-                            </CollectionView.ItemsLayout>
-                            <CollectionView.ItemTemplate>
-                                <DataTemplate x:DataType="vm:SceneEntityOption">
-                                    <HorizontalStackLayout Padding="0,1" Spacing="6">
-                                        <CheckBox IsChecked="{Binding IsSelected}"
-                                                  Color="#C8B07A"
-                                                  Scale="0.8"
-                                                  VerticalOptions="Center" />
-                                        <Label Text="{Binding Name}"
-                                               TextColor="{StaticResource TextPrimary}"
-                                               FontSize="13"
-                                               VerticalOptions="Center" />
-                                        <Label Text="auto"
-                                               IsVisible="{Binding IsAutoDetected}"
-                                               FontSize="10"
-                                               FontAttributes="Italic"
-                                               TextColor="#C8B07A"
-                                               VerticalOptions="Center" />
-                                    </HorizontalStackLayout>
-                                </DataTemplate>
-                            </CollectionView.ItemTemplate>
-                            <CollectionView.EmptyView>
-                                <Label Text="Add items in the It tab first"
-                                       TextColor="{StaticResource TextDisabled}"
-                                       FontSize="12" FontAttributes="Italic" />
-                            </CollectionView.EmptyView>
-                        </CollectionView>
-
-                        <!-- Goal -->
-                        <Label Grid.Row="5" Grid.Column="0"
-                               Text="Goal" Style="{StaticResource FieldLabel}"
-                               VerticalOptions="Center" />
-                        <Entry Grid.Row="5" Grid.Column="1"
-                               Text="{Binding SelectedScene.Goal}"
-                               Style="{StaticResource ElementFieldEntry}"
-                               Placeholder="What does the POV character want?"
-                               Unfocused="OnSceneMetadataUnfocused" />
-
-                        <!-- Conflict -->
-                        <Label Grid.Row="6" Grid.Column="0"
-                               Text="Conflict" Style="{StaticResource FieldLabel}"
-                               VerticalOptions="Center" />
-                        <Entry Grid.Row="6" Grid.Column="1"
-                               Text="{Binding SelectedScene.Conflict}"
-                               Style="{StaticResource ElementFieldEntry}"
-                               Placeholder="What stands in the way?"
-                               Unfocused="OnSceneMetadataUnfocused" />
-
-                        <!-- Outcome -->
-                        <Label Grid.Row="7" Grid.Column="0"
-                               Text="Outcome" Style="{StaticResource FieldLabel}"
-                               VerticalOptions="Center" />
-                        <Entry Grid.Row="7" Grid.Column="1"
-                               Text="{Binding SelectedScene.Outcome}"
-                               Style="{StaticResource ElementFieldEntry}"
-                               Placeholder="How does it resolve?"
-                               Unfocused="OnSceneMetadataUnfocused" />
-
-                        <!-- Notes -->
-                        <Label Grid.Row="8" Grid.Column="0"
-                               Text="Notes" Style="{StaticResource FieldLabel}"
-                               VerticalOptions="Start" Margin="0,4,0,0" />
-                        <Editor Grid.Row="8" Grid.Column="1"
-                                Text="{Binding SelectedScene.Notes}"
-                                Style="{StaticResource ElementFieldEditor}"
-                                HeightRequest="60"
-                                Placeholder="Scene notes..."
-                                Unfocused="OnSceneMetadataUnfocused" />
-                    </Grid>
-                </Border>
 
                 <!-- WebView rich text editor -->
                 <WebView Grid.Row="4"
@@ -810,81 +200,38 @@
                          Navigating="OnEditorNavigating"
                          Navigated="OnEditorNavigated"
                          BackgroundColor="{StaticResource EditorBackground}" />
-            </Grid>
 
-            <!-- Book info editor (visible when ShowBookInfo is active) -->
-            <Grid Grid.Row="0"
-                  IsVisible="{Binding IsBookInfoVisible}"
-                  BackgroundColor="{StaticResource EditorBackground}"
-                  RowDefinitions="Auto,*">
-
-                <!-- Book info toolbar -->
-                <Grid Grid.Row="0"
-                      BackgroundColor="{StaticResource ToolbarBackground}"
-                      ColumnDefinitions="*,Auto"
-                      Padding="4,2">
-                    <Label Grid.Column="0"
-                           Text="Book Info"
-                           Style="{StaticResource WordCountLabel}"
-                           VerticalOptions="Center" />
-                    <Button Grid.Column="1" Text="✕ Close"
-                            Style="{StaticResource IconButton}"
-                            Command="{Binding CloseBookInfoCommand}"
-                            ToolTipProperties.Text="Close book info" />
-                </Grid>
-
-                <ScrollView Grid.Row="1">
-                    <VerticalStackLayout Padding="16" Spacing="12">
-
-                        <Label Text="BOOK DETAILS" Style="{StaticResource PanelHeaderLabel}" />
-
-                        <Label Text="Title" Style="{StaticResource FieldLabel}" />
-                        <Entry Text="{Binding SelectedBook.Title}"
-                               Style="{StaticResource ElementFieldEntry}"
-                               Placeholder="Book title"
-                               Unfocused="OnBookInfoFieldUnfocused" />
-
-                        <Label Text="Author" Style="{StaticResource FieldLabel}" />
-                        <Entry Text="{Binding SelectedBook.Author}"
-                               Style="{StaticResource ElementFieldEntry}"
-                               Placeholder="Author name"
-                               Unfocused="OnBookInfoFieldUnfocused" />
-
-                        <Label Text="Synopsis" Style="{StaticResource FieldLabel}" />
-                        <Editor Text="{Binding SelectedBook.Description}"
-                                Style="{StaticResource ElementFieldEditor}"
-                                HeightRequest="120"
-                                Placeholder="Brief synopsis or blurb..."
-                                Unfocused="OnBookInfoFieldUnfocused" />
-
-                        <Label Text="Author Bio" Style="{StaticResource FieldLabel}" />
-                        <Editor Text="{Binding SelectedBook.AuthorBio}"
-                                Style="{StaticResource ElementFieldEditor}"
-                                HeightRequest="100"
-                                Placeholder="Author biography..."
-                                Unfocused="OnBookInfoFieldUnfocused" />
-
-                        <Label Text="WORD TARGET" Style="{StaticResource PanelHeaderLabel}" Margin="0,8,0,0" />
-
-                        <Label Text="Target Word Count" Style="{StaticResource FieldLabel}" />
-                        <Entry Text="{Binding SelectedBook.WordTarget}"
-                               Style="{StaticResource ElementFieldEntry}"
-                               Placeholder="0 (leave blank for no target)"
-                               Keyboard="Numeric"
-                               Unfocused="OnBookInfoFieldUnfocused" />
-
-                        <VerticalStackLayout IsVisible="{Binding SelectedBook.HasWordTarget}" Spacing="4">
-                            <Label Text="{Binding SelectedBook.WordCountSummary}"
-                                   Style="{StaticResource WordCountLabel}" />
-                            <ProgressBar Progress="{Binding SelectedBook.WordCountProgress}"
-                                         ProgressColor="{StaticResource AccentPrimary}"
-                                         BackgroundColor="{StaticResource SurfaceRaised}"
-                                         HeightRequest="6" />
-                        </VerticalStackLayout>
-
+                <!-- Empty state: one clear next step instead of a blank page -->
+                <Grid Grid.Row="4"
+                      IsVisible="{Binding IsEditorEmpty}"
+                      BackgroundColor="{StaticResource EditorBackground}">
+                    <VerticalStackLayout Spacing="10"
+                                         HorizontalOptions="Center"
+                                         VerticalOptions="Center"
+                                         Padding="24">
+                        <Label Text="{Binding EditorEmptyTitle}" Style="{StaticResource EmptyStateTitle}" />
+                        <Label Text="{Binding EditorEmptyMessage}" Style="{StaticResource EmptyStateMessage}" />
+                        <Button Text="Create a book"
+                                IsVisible="{Binding ShowCreateBookAction}"
+                                Command="{Binding AddBookCommand}"
+                                Style="{StaticResource PrimaryActionButton}"
+                                Margin="0,6,0,0" />
+                        <Button Text="Add a chapter"
+                                IsVisible="{Binding ShowAddChapterAction}"
+                                Command="{Binding AddChapterCommand}"
+                                Style="{StaticResource PrimaryActionButton}"
+                                Margin="0,6,0,0" />
+                        <Button Text="Add a scene"
+                                IsVisible="{Binding ShowAddSceneAction}"
+                                Command="{Binding AddSceneCommand}"
+                                Style="{StaticResource PrimaryActionButton}"
+                                Margin="0,6,0,0" />
                     </VerticalStackLayout>
-                </ScrollView>
+                </Grid>
             </Grid>
+
+            <!-- Book -->
+            <workspaces:BookMain IsVisible="{Binding IsBookWorkspace}" />
 
             <!-- Writing statistics panel -->
             <Grid Grid.Row="0"
@@ -898,46 +245,18 @@
                       ColumnDefinitions="*,Auto,Auto"
                       Padding="4,2">
                     <Label Grid.Column="0"
-                           Text="Writing Statistics"
-                           Style="{StaticResource WordCountLabel}"
+                           Text="{Binding StatsPanelTitle}"
+                           TextColor="{StaticResource TextPrimary}"
+                           FontSize="13"
+                           FontAttributes="Bold"
+                           Margin="8,0"
                            VerticalOptions="Center" />
-                    <Button Grid.Column="1" Text="↺"
+                    <Button Grid.Column="1" Text="↺ Refresh"
                             Style="{StaticResource IconButton}"
+                            FontSize="12"
+                            IsVisible="{Binding IsInsightsWorkspace}"
                             Command="{Binding RefreshStatisticsCommand}"
-                            ToolTipProperties.Text="Refresh statistics" />
-                    <Button Grid.Column="2" Text="✕ Close"
-                            Style="{StaticResource IconButton}"
-                            Command="{Binding CloseStatisticsCommand}"
-                            ToolTipProperties.Text="Close statistics" />
-                </Grid>
-
-                <!-- Tab strip -->
-                <Grid Grid.Row="1" ColumnDefinitions="*,*,*,*,*" Padding="4,4,4,0">
-                    <Button Grid.Column="0" Text="Frequency"
-                            Style="{StaticResource SidebarTabButton}"
-                            Command="{Binding SetStatsTabCommand}"
-                            CommandParameter="Frequency"
-                            ToolTipProperties.Text="Top 50 most-used words" />
-                    <Button Grid.Column="1" Text="Problem Words"
-                            Style="{StaticResource SidebarTabButton}"
-                            Command="{Binding SetStatsTabCommand}"
-                            CommandParameter="Problems"
-                            ToolTipProperties.Text="Overused non-stopwords" />
-                    <Button Grid.Column="2" Text="By Character"
-                            Style="{StaticResource SidebarTabButton}"
-                            Command="{Binding SetStatsTabCommand}"
-                            CommandParameter="Characters"
-                            ToolTipProperties.Text="Word count per viewpoint character" />
-                    <Button Grid.Column="3" Text="Daily Progress"
-                            Style="{StaticResource SidebarTabButton}"
-                            Command="{Binding SetStatsTabCommand}"
-                            CommandParameter="DailyProgress"
-                            ToolTipProperties.Text="Words written per day" />
-                    <Button Grid.Column="4" Text="Analysis"
-                            Style="{StaticResource SidebarTabButton}"
-                            Command="{Binding SetStatsTabCommand}"
-                            CommandParameter="Analysis"
-                            ToolTipProperties.Text="NLP-powered writing analysis" />
+                            ToolTipProperties.Text="Recount statistics" />
                 </Grid>
 
                 <!-- Tab content -->
@@ -980,16 +299,15 @@
                     </CollectionView>
 
                     <!-- Problem words tab -->
-                    <CollectionView IsVisible="{Binding IsProblemsTab}"
+                    <Grid IsVisible="{Binding IsProblemsTab}" RowDefinitions="Auto,*">
+                    <Label Text="Words appearing &gt;0.5% of total, &gt;3 times, excluding stopwords"
+                           TextColor="{StaticResource TextSecondary}"
+                           FontSize="11" FontAttributes="Italic"
+                           Margin="12,8,12,4" />
+                    <CollectionView Grid.Row="1"
                                     ItemsSource="{Binding ProblemWordsData}"
                                     SelectionMode="None"
                                     Margin="8,4">
-                        <CollectionView.Header>
-                            <Label Text="Words appearing &gt;0.5% of total, &gt;3 times, excluding stopwords"
-                                   TextColor="{StaticResource TextDisabled}"
-                                   FontSize="11" FontAttributes="Italic"
-                                   Margin="4,4,4,8" />
-                        </CollectionView.Header>
                         <CollectionView.ItemTemplate>
                             <DataTemplate x:DataType="vm:WordFrequencyEntry">
                                 <Grid ColumnDefinitions="120,40,60" Padding="4,2" ColumnSpacing="8">
@@ -1018,6 +336,7 @@
                                    Margin="0,20,0,0" />
                         </CollectionView.EmptyView>
                     </CollectionView>
+                    </Grid>
 
                     <!-- By Character tab -->
                     <CollectionView IsVisible="{Binding IsCharactersTab}"
@@ -1096,139 +415,6 @@
                         </CollectionView.EmptyView>
                     </CollectionView>
 
-                    <!-- Analysis tab -->
-                    <Grid IsVisible="{Binding IsAnalysisTab}" RowDefinitions="Auto,Auto,*">
-
-                        <!-- Run / Cancel / Download buttons and progress -->
-                        <VerticalStackLayout Grid.Row="0" Padding="8,4" Spacing="6">
-                            <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
-                                <Button Grid.Column="0"
-                                        Text="Run Analysis"
-                                        Style="{StaticResource SidebarTabButton}"
-                                        Command="{Binding RunAnalysisCommand}"
-                                        ToolTipProperties.Text="Analyze the current book for style, pacing, and structure" />
-                                <Button Grid.Column="1"
-                                        Text="Cancel"
-                                        Style="{StaticResource SidebarTabButton}"
-                                        Command="{Binding CancelAnalysisCommand}"
-                                        IsVisible="{Binding IsAnalyzing}"
-                                        ToolTipProperties.Text="Cancel running analysis" />
-                                <Button Grid.Column="2"
-                                        Text="Download Models"
-                                        Style="{StaticResource SidebarTabButton}"
-                                        Command="{Binding DownloadModelsCommand}"
-                                        ToolTipProperties.Text="Download NLP models for enhanced analysis (~330MB)" />
-                                <Button Grid.Column="3"
-                                        Text="View Report"
-                                        Style="{StaticResource SidebarTabButton}"
-                                        Command="{Binding ShowNlpReportCommand}"
-                                        IsVisible="{Binding HasAnalysisResults}"
-                                        ToolTipProperties.Text="Open NLP analysis report visualization" />
-                            </Grid>
-                            <Label Text="{Binding AnalysisProgress}"
-                                   TextColor="{StaticResource TextSecondary}"
-                                   FontSize="11" FontAttributes="Italic"
-                                   IsVisible="{Binding AnalysisProgress, Converter={StaticResource IsNotNullOrEmptyConverter}}" />
-                            <Label Text="{Binding AnalysisStatusText}"
-                                   TextColor="{Binding AnalysisStatusColor}"
-                                   FontSize="11" FontAttributes="Italic"
-                                   IsVisible="{Binding AnalysisStatusText, Converter={StaticResource IsNotNullOrEmptyConverter}}" />
-                            <ActivityIndicator IsRunning="{Binding IsAnalyzing}"
-                                               IsVisible="{Binding IsAnalyzing}"
-                                               Color="{StaticResource AccentPrimary}"
-                                               HeightRequest="20"
-                                               HorizontalOptions="Start" />
-                        </VerticalStackLayout>
-
-                        <!-- Filter controls -->
-                        <Grid Grid.Row="1"
-                              IsVisible="{Binding HasAnalysisResults}"
-                              ColumnDefinitions="Auto,*,Auto,*,Auto"
-                              ColumnSpacing="6"
-                              Padding="8,4"
-                              RowDefinitions="Auto">
-                            <Label Grid.Column="0"
-                                   Text="Category:"
-                                   TextColor="{StaticResource TextSecondary}"
-                                   FontSize="11"
-                                   VerticalOptions="Center" />
-                            <Picker Grid.Column="1"
-                                    ItemsSource="{Binding CategoryFilterOptions}"
-                                    SelectedItem="{Binding SelectedCategoryFilter}"
-                                    TextColor="{StaticResource TextPrimary}"
-                                    FontSize="11"
-                                    HeightRequest="28" />
-                            <Label Grid.Column="2"
-                                   Text="Severity:"
-                                   TextColor="{StaticResource TextSecondary}"
-                                   FontSize="11"
-                                   VerticalOptions="Center" />
-                            <Picker Grid.Column="3"
-                                    ItemsSource="{Binding SeverityFilterOptions}"
-                                    SelectedItem="{Binding SelectedSeverityFilter}"
-                                    TextColor="{StaticResource TextPrimary}"
-                                    FontSize="11"
-                                    HeightRequest="28" />
-                            <Button Grid.Column="4"
-                                    Text="Clear"
-                                    Style="{StaticResource SidebarTabButton}"
-                                    Command="{Binding ClearAnalysisCommand}"
-                                    FontSize="11"
-                                    HeightRequest="28"
-                                    ToolTipProperties.Text="Clear analysis results" />
-                        </Grid>
-
-                        <!-- Notes list -->
-                        <CollectionView Grid.Row="2"
-                                        ItemsSource="{Binding NlpNotes}"
-                                        SelectionMode="None"
-                                        Margin="8,4">
-                            <CollectionView.ItemTemplate>
-                                <DataTemplate x:DataType="analysis:NlpNote">
-                                    <Border StrokeShape="RoundRectangle 4"
-                                            Stroke="{StaticResource SurfaceRaised}"
-                                            BackgroundColor="{StaticResource SurfaceRaised}"
-                                            Padding="8,6"
-                                            Margin="0,2">
-                                        <Border.GestureRecognizers>
-                                            <TapGestureRecognizer
-                                                Command="{Binding Source={x:Reference Page}, Path=BindingContext.NavigateToNoteCommand}"
-                                                CommandParameter="{Binding .}" />
-                                        </Border.GestureRecognizers>
-                                        <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="Auto,*" ColumnSpacing="8" RowSpacing="2">
-                                            <BoxView Grid.Row="0" Grid.Column="0"
-                                                     WidthRequest="8" HeightRequest="8"
-                                                     CornerRadius="4"
-                                                     Color="{Binding SeverityColor}"
-                                                     VerticalOptions="Center" />
-                                            <Label Grid.Row="0" Grid.Column="1"
-                                                   TextColor="{StaticResource TextSecondary}"
-                                                   FontSize="11">
-                                                <Label.Text>
-                                                    <MultiBinding StringFormat="{}{0} / {1}">
-                                                        <Binding Path="CategoryLabel" />
-                                                        <Binding Path="ChapterTitle" />
-                                                    </MultiBinding>
-                                                </Label.Text>
-                                            </Label>
-                                            <Label Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
-                                                   Text="{Binding Message}"
-                                                   TextColor="{StaticResource TextPrimary}"
-                                                   FontSize="12"
-                                                   LineBreakMode="WordWrap" />
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </CollectionView.ItemTemplate>
-                            <CollectionView.EmptyView>
-                                <Label Text="Click 'Run Analysis' to analyze your book for style, pacing, and structural patterns."
-                                       TextColor="{StaticResource TextDisabled}"
-                                       FontSize="13" FontAttributes="Italic"
-                                       HorizontalOptions="Center"
-                                       Margin="0,20,0,0" />
-                            </CollectionView.EmptyView>
-                        </CollectionView>
-                    </Grid>
 
                 </Grid>
             </Grid>
@@ -1245,24 +431,13 @@
                       ColumnDefinitions="Auto,Auto,*,Auto"
                       ColumnSpacing="4"
                       Padding="4,2">
-                    <Button Grid.Column="0"
-                            Text="Entities"
-                            Style="{StaticResource SidebarTabButton}"
-                            Command="{Binding SwitchReportTypeCommand}"
-                            CommandParameter="Entities"
-                            ToolTipProperties.Text="Entity relationship graph" />
-                    <Button Grid.Column="1"
-                            Text="NLP Analysis"
-                            Style="{StaticResource SidebarTabButton}"
-                            Command="{Binding SwitchReportTypeCommand}"
-                            CommandParameter="NLP"
-                            IsEnabled="{Binding HasAnalysisResults}"
-                            ToolTipProperties.Text="NLP analysis report" />
-                    <Label Grid.Column="2" />
-                    <Button Grid.Column="3" Text="✕ Close"
-                            Style="{StaticResource IconButton}"
-                            Command="{Binding CloseReportsCommand}"
-                            ToolTipProperties.Text="Close reports" />
+                    <Label Grid.Column="0" Grid.ColumnSpan="3"
+                           Text="{Binding ReportPanelTitle}"
+                           TextColor="{StaticResource TextPrimary}"
+                           FontSize="13"
+                           FontAttributes="Bold"
+                           Margin="8,0"
+                           VerticalOptions="Center" />
                 </Grid>
 
                 <!-- vis.js network WebView — Source set programmatically via
@@ -1273,264 +448,12 @@
                          Navigating="OnReportNavigating" />
             </Grid>
 
-            <!-- Element detail editor (visible when a character/location/item is selected) -->
-            <Grid Grid.Row="0"
-                  IsVisible="{Binding IsElementEditorVisible}"
-                  BackgroundColor="{StaticResource EditorBackground}"
-                  RowDefinitions="Auto,*">
-
-                <!-- Element editor toolbar -->
-                <Grid Grid.Row="0"
-                      BackgroundColor="{StaticResource ToolbarBackground}"
-                      ColumnDefinitions="*,Auto"
-                      Padding="4,2">
-                    <Label Grid.Column="0"
-                           Text="Story Element"
-                           Style="{StaticResource WordCountLabel}"
-                           VerticalOptions="Center" />
-                    <Button Grid.Column="1" Text="✕ Close"
-                            Style="{StaticResource IconButton}"
-                            Command="{Binding CloseElementEditorCommand}"
-                            ToolTipProperties.Text="Close and return to scene editor" />
-                </Grid>
-
-                <ScrollView Grid.Row="1">
-                <VerticalStackLayout Padding="16" Spacing="12">
-
-                    <!-- ── Character editor ── -->
-                    <VerticalStackLayout IsVisible="{Binding SelectedCharacter, Converter={StaticResource IsNotNullConverter}}"
-                                         Spacing="10">
-                        <Label Text="CHARACTER" Style="{StaticResource PanelHeaderLabel}" />
-
-                        <Label Text="Name" Style="{StaticResource FieldLabel}" />
-                        <Entry Text="{Binding SelectedCharacter.Name}"
-                               Style="{StaticResource ElementFieldEntry}"
-                               Placeholder="Character name"
-                               Unfocused="OnElementFieldUnfocused" />
-
-                        <Label Text="Full Name" Style="{StaticResource FieldLabel}" />
-                        <Entry Text="{Binding SelectedCharacter.FullName}"
-                               Style="{StaticResource ElementFieldEntry}"
-                               Placeholder="Full name"
-                               Unfocused="OnElementFieldUnfocused" />
-
-                        <Label Text="Description" Style="{StaticResource FieldLabel}" />
-                        <Editor Text="{Binding SelectedCharacter.Description}"
-                                Style="{StaticResource ElementFieldEditor}"
-                                Placeholder="Brief description"
-                                Unfocused="OnElementFieldUnfocused" />
-
-                        <Label Text="Bio" Style="{StaticResource FieldLabel}" />
-                        <Editor Text="{Binding SelectedCharacter.Bio}"
-                                Style="{StaticResource ElementFieldEditor}"
-                                HeightRequest="150"
-                                Placeholder="Character biography"
-                                Unfocused="OnElementFieldUnfocused" />
-
-                        <Label Text="Notes" Style="{StaticResource FieldLabel}" />
-                        <Editor Text="{Binding SelectedCharacter.Notes}"
-                                Style="{StaticResource ElementFieldEditor}"
-                                Placeholder="Additional notes"
-                                Unfocused="OnElementFieldUnfocused" />
-
-                        <Label Text="Also Known As" Style="{StaticResource FieldLabel}" />
-                        <Entry Text="{Binding SelectedCharacter.Aka}"
-                               Style="{StaticResource ElementFieldEntry}"
-                               Placeholder="Comma-separated aliases (e.g. John, Johnny, Mr. Smith)"
-                               Unfocused="OnElementFieldUnfocused" />
-
-                        <Label Text="Image" Style="{StaticResource FieldLabel}" />
-                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto">
-                            <Image Grid.Column="0"
-                                   Source="{Binding SelectedCharacter.ImagePath, Converter={StaticResource ImagePathConverter}}"
-                                   HeightRequest="120" Aspect="AspectFit"
-                                   HorizontalOptions="Start" />
-                            <Button Grid.Column="1" Text="Browse..."
-                                    Style="{StaticResource IconButton}"
-                                    Command="{Binding PickCharacterImageCommand}"
-                                    VerticalOptions="Start"
-                                    ToolTipProperties.Text="Pick an image" />
-                        </Grid>
-                    </VerticalStackLayout>
-
-                    <!-- ── Location editor ── -->
-                    <VerticalStackLayout IsVisible="{Binding SelectedLocation, Converter={StaticResource IsNotNullConverter}}"
-                                         Spacing="10">
-                        <Label Text="LOCATION" Style="{StaticResource PanelHeaderLabel}" />
-
-                        <Label Text="Name" Style="{StaticResource FieldLabel}" />
-                        <Entry Text="{Binding SelectedLocation.Name}"
-                               Style="{StaticResource ElementFieldEntry}"
-                               Placeholder="Location name"
-                               Unfocused="OnElementFieldUnfocused" />
-
-                        <Label Text="Description" Style="{StaticResource FieldLabel}" />
-                        <Editor Text="{Binding SelectedLocation.Description}"
-                                Style="{StaticResource ElementFieldEditor}"
-                                Placeholder="Brief description"
-                                Unfocused="OnElementFieldUnfocused" />
-
-                        <Label Text="Notes" Style="{StaticResource FieldLabel}" />
-                        <Editor Text="{Binding SelectedLocation.Notes}"
-                                Style="{StaticResource ElementFieldEditor}"
-                                Placeholder="Additional notes"
-                                Unfocused="OnElementFieldUnfocused" />
-
-                        <Label Text="Also Known As" Style="{StaticResource FieldLabel}" />
-                        <Entry Text="{Binding SelectedLocation.Aka}"
-                               Style="{StaticResource ElementFieldEntry}"
-                               Placeholder="Comma-separated aliases (e.g. NYC, the city)"
-                               Unfocused="OnElementFieldUnfocused" />
-
-                        <Label Text="Image" Style="{StaticResource FieldLabel}" />
-                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto">
-                            <Image Grid.Column="0"
-                                   Source="{Binding SelectedLocation.ImagePath, Converter={StaticResource ImagePathConverter}}"
-                                   HeightRequest="120" Aspect="AspectFit"
-                                   HorizontalOptions="Start" />
-                            <Button Grid.Column="1" Text="Browse..."
-                                    Style="{StaticResource IconButton}"
-                                    Command="{Binding PickLocationImageCommand}"
-                                    VerticalOptions="Start"
-                                    ToolTipProperties.Text="Pick an image" />
-                        </Grid>
-                    </VerticalStackLayout>
-
-                    <!-- ── Item editor ── -->
-                    <VerticalStackLayout IsVisible="{Binding SelectedItem, Converter={StaticResource IsNotNullConverter}}"
-                                         Spacing="10">
-                        <Label Text="ITEM" Style="{StaticResource PanelHeaderLabel}" />
-
-                        <Label Text="Name" Style="{StaticResource FieldLabel}" />
-                        <Entry Text="{Binding SelectedItem.Name}"
-                               Style="{StaticResource ElementFieldEntry}"
-                               Placeholder="Item name"
-                               Unfocused="OnElementFieldUnfocused" />
-
-                        <Label Text="Description" Style="{StaticResource FieldLabel}" />
-                        <Editor Text="{Binding SelectedItem.Description}"
-                                Style="{StaticResource ElementFieldEditor}"
-                                Placeholder="Brief description"
-                                Unfocused="OnElementFieldUnfocused" />
-
-                        <Label Text="Notes" Style="{StaticResource FieldLabel}" />
-                        <Editor Text="{Binding SelectedItem.Notes}"
-                                Style="{StaticResource ElementFieldEditor}"
-                                Placeholder="Additional notes"
-                                Unfocused="OnElementFieldUnfocused" />
-
-                        <Label Text="Also Known As" Style="{StaticResource FieldLabel}" />
-                        <Entry Text="{Binding SelectedItem.Aka}"
-                               Style="{StaticResource ElementFieldEntry}"
-                               Placeholder="Comma-separated aliases (e.g. the sword, Excalibur)"
-                               Unfocused="OnElementFieldUnfocused" />
-                    </VerticalStackLayout>
-
-                </VerticalStackLayout>
-                </ScrollView>
-            </Grid>
-
-            <!-- Resizable splitter grip -->
-            <BoxView Grid.Row="1"
-                     IsVisible="{Binding IsSceneEditorVisible}"
-                     HeightRequest="6"
-                     Color="{StaticResource BorderMedium}">
-                <BoxView.GestureRecognizers>
-                    <PanGestureRecognizer PanUpdated="OnSplitterPanUpdated" />
-                </BoxView.GestureRecognizers>
-            </BoxView>
-
-            <!-- Scenes panel -->
-            <Grid Grid.Row="2"
-                  IsVisible="{Binding IsSceneEditorVisible}"
-                  BackgroundColor="{StaticResource SurfaceMid}"
-                  RowDefinitions="Auto,*">
-                <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Padding="0,4,4,0">
-                    <Label Grid.Column="0" Text="SCENES" Style="{StaticResource PanelHeaderLabel}" />
-                    <Button Grid.Column="1" Text="+"
-                            Style="{StaticResource IconButton}"
-                            Command="{Binding AddSceneCommand}"
-                            IsEnabled="{Binding HasSelectedChapter}"
-                            ToolTipProperties.Text="Add scene" />
-                </Grid>
-                <CollectionView Grid.Row="1"
-                                ItemsSource="{Binding SelectedChapter.Scenes}"
-                                SelectionMode="Single"
-                                SelectedItem="{Binding SelectedScene}">
-                    <CollectionView.ItemTemplate>
-                        <DataTemplate x:DataType="models:Scene">
-                            <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto"
-                                  RowDefinitions="Auto,Auto,Auto"
-                                  BackgroundColor="Transparent"
-                                  Padding="0,1">
-                                <Grid.GestureRecognizers>
-                                    <TapGestureRecognizer
-                                        NumberOfTapsRequired="2"
-                                        Command="{Binding Source={x:Reference Page}, Path=BindingContext.RenameSceneCommand}"
-                                        CommandParameter="{Binding .}" />
-                                    <DropGestureRecognizer AllowDrop="True"
-                                        DragOver="OnSceneDragOver"
-                                        DragLeave="OnSceneDragLeave"
-                                        Drop="OnSceneDrop" />
-                                </Grid.GestureRecognizers>
-                                <BoxView Grid.Row="0" Grid.ColumnSpan="6"
-                                         HeightRequest="2" IsVisible="False"
-                                         BackgroundColor="{StaticResource AccentPrimary}" />
-                                <Label Grid.Row="1" Grid.Column="0"
-                                       Style="{StaticResource DragHandleLabel}">
-                                    <Label.GestureRecognizers>
-                                        <DragGestureRecognizer CanDrag="True"
-                                            DragStarting="OnSceneDragStarting"
-                                            DropCompleted="OnSceneDragCompleted" />
-                                    </Label.GestureRecognizers>
-                                </Label>
-                                <BoxView Grid.Row="1" Grid.Column="1"
-                                         WidthRequest="6" HeightRequest="6"
-                                         CornerRadius="3"
-                                         Color="{Binding Status, Converter={converters:SceneStatusColorConverter}}"
-                                         VerticalOptions="Center"
-                                         Margin="0,0,2,0" />
-                                <Label Grid.Row="1" Grid.Column="2"
-                                       Text="{Binding Title}"
-                                       Style="{StaticResource ListItemLabel}"
-                                       LineBreakMode="TailTruncation" />
-                                <Border Grid.Row="1" Grid.Column="3"
-                                        IsVisible="{Binding HasAnalysisNotes}"
-                                        BackgroundColor="#3A2A2A35"
-                                        StrokeShape="RoundRectangle 7"
-                                        Stroke="#E5C07B"
-                                        StrokeThickness="1"
-                                        HeightRequest="16"
-                                        MinimumWidthRequest="16"
-                                        Padding="3,0"
-                                        VerticalOptions="Center"
-                                        Margin="0,0,2,0">
-                                    <Label Text="{Binding AnalysisNoteCount}"
-                                           TextColor="#E5C07B"
-                                           FontSize="9"
-                                           HorizontalOptions="Center"
-                                           VerticalOptions="Center" />
-                                </Border>
-                                <Label Grid.Row="1" Grid.Column="4"
-                                       Text="{Binding WordCount, StringFormat='{0}w'}"
-                                       Style="{StaticResource WordCountLabel}" />
-                                <Button Grid.Row="1" Grid.Column="5" Text="×"
-                                        Style="{StaticResource DangerIconButton}"
-                                        Command="{Binding Source={x:Reference Page}, Path=BindingContext.DeleteSceneCommand}"
-                                        CommandParameter="{Binding .}" />
-                                <BoxView Grid.Row="2" Grid.ColumnSpan="6"
-                                         HeightRequest="2" IsVisible="False"
-                                         BackgroundColor="{StaticResource AccentPrimary}" />
-                            </Grid>
-                        </DataTemplate>
-                    </CollectionView.ItemTemplate>
-                </CollectionView>
-            </Grid>
+            <!-- Story Bible -->
+            <workspaces:StoryBibleMain IsVisible="{Binding IsStoryBibleWorkspace}" />
 
             <!-- ── Entity preview overlay ─────────────────────────────────────── -->
             <!-- Floats above all rows when an entity span is clicked in the editor -->
-            <Grid Grid.RowSpan="3"
-                  IsVisible="{Binding IsEntityPreviewVisible}"
+            <Grid IsVisible="{Binding IsEntityPreviewVisible}"
                   BackgroundColor="#AA000000">
                 <Border BackgroundColor="{StaticResource SurfaceMid}"
                         Stroke="{StaticResource BorderMedium}"
@@ -1597,5 +520,14 @@
             </Grid>
 
         </Grid>
+
+        <!-- ── INSPECTOR: details of the open scene (Write) ──────────────── -->
+        <workspaces:SceneInspector Grid.Row="0" Grid.Column="4" IsVisible="{Binding IsInspectorVisible}" />
+    </Grid>
+
+        <!-- ── STATUS BAR ─────────────────────────────────────────────────── -->
+        <BoxView Grid.Row="1" HeightRequest="1" VerticalOptions="Start"
+                 Color="{StaticResource BorderSubtle}" />
+        <shell:StatusBar Grid.Row="1" />
     </Grid>
 </ContentPage>

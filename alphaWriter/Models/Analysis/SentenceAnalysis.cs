@@ -8,6 +8,12 @@ namespace alphaWriter.Models.Analysis
         public string Text { get; set; } = string.Empty;
         public int WordCount { get; set; }
 
+        /// <summary>Offset of this sentence in the scene's normalized plain text.</summary>
+        public int Start { get; set; }
+
+        /// <summary>Index of the paragraph that contains this sentence.</summary>
+        public int ParagraphIndex { get; set; }
+
         // Populated by EmotionService (Phase 3)
         public List<(EmotionLabel Label, float Confidence)> Emotions { get; set; } = [];
 

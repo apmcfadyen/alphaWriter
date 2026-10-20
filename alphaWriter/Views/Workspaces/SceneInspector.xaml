@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+    Write workspace, right side: details of the open scene. Sits beside the editor
+    instead of pushing it down, and can be hidden from the editor toolbar.
+-->
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:alphaWriter.ViewModels"
+             x:Class="alphaWriter.Views.Workspaces.SceneInspector">
+
+    <ContentView.Resources>
+        <Style x:Key="InspectorSection" TargetType="Label" BasedOn="{StaticResource PanelHeaderLabel}">
+            <Setter Property="Margin" Value="0,10,0,4" />
+        </Style>
+        <Style x:Key="InspectorEmpty" TargetType="Label">
+            <Setter Property="TextColor" Value="{StaticResource TextDisabled}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontAttributes" Value="Italic" />
+            <Setter Property="LineBreakMode" Value="WordWrap" />
+        </Style>
+    </ContentView.Resources>
+
+    <Grid RowDefinitions="Auto,*"
+          WidthRequest="300"
+          BackgroundColor="{StaticResource SurfaceMid}">
+
+        <Grid ColumnDefinitions="*,Auto" Padding="0,4,4,0">
+            <Label Text="SCENE DETAILS" Style="{StaticResource PanelHeaderLabel}" />
+            <Button Grid.Column="1" Text="✕"
+                    Style="{StaticResource IconButton}"
+                    Command="{Binding ToggleMetadataPanelCommand}"
+                    ToolTipProperties.Text="Hide scene details"
+                    SemanticProperties.Description="Hide scene details" />
+        </Grid>
+
+        <ScrollView Grid.Row="1">
+            <VerticalStackLayout Padding="12,0,12,16" Spacing="2">
+
+                <!-- Status -->
+                <Label Text="STATUS" Style="{StaticResource InspectorSection}" />
+                <FlexLayout Wrap="Wrap" JustifyContent="Start">
+                    <Button Text="Outline" Style="{StaticResource MetadataChipButton}" Margin="0,0,4,4"
+                            BackgroundColor="{Binding SelectedScene.Status, Converter={StaticResource SelectedTabConverter}, ConverterParameter=Outline}"
+                            Command="{Binding SetSceneStatusCommand}" CommandParameter="Outline"
+                            ToolTipProperties.Text="Planning only — not counted towards word totals" />
+                    <Button Text="Draft" Style="{StaticResource MetadataChipButton}" Margin="0,0,4,4"
+                            BackgroundColor="{Binding SelectedScene.Status, Converter={StaticResource SelectedTabConverter}, ConverterParameter=Draft}"
+                            Command="{Binding SetSceneStatusCommand}" CommandParameter="Draft" />
+                    <Button Text="1st Edit" Style="{StaticResource MetadataChipButton}" Margin="0,0,4,4"
+                            BackgroundColor="{Binding SelectedScene.Status, Converter={StaticResource SelectedTabConverter}, ConverterParameter=FirstEdit}"
+                            Command="{Binding SetSceneStatusCommand}" CommandParameter="FirstEdit" />
+                    <Button Text="2nd Edit" Style="{StaticResource MetadataChipButton}" Margin="0,0,4,4"
+                            BackgroundColor="{Binding SelectedScene.Status, Converter={StaticResource SelectedTabConverter}, ConverterParameter=SecondEdit}"
+                            Command="{Binding SetSceneStatusCommand}" CommandParameter="SecondEdit" />
+                    <Button Text="Done" Style="{StaticResource MetadataChipButton}" Margin="0,0,4,4"
+                            BackgroundColor="{Binding SelectedScene.Status, Converter={StaticResource SelectedTabConverter}, ConverterParameter=Done}"
+                            Command="{Binding SetSceneStatusCommand}" CommandParameter="Done" />
+                </FlexLayout>
+
+                <!-- Story beats -->
+                <Label Text="GOAL" Style="{StaticResource InspectorSection}" />
+                <Entry Text="{Binding SelectedScene.Goal}"
+                       Style="{StaticResource ElementFieldEntry}"
+                       Placeholder="What does the POV character want?"
+                       Unfocused="OnFieldUnfocused" />
+                <Label Text="CONFLICT" Style="{StaticResource InspectorSection}" />
+                <Entry Text="{Binding SelectedScene.Conflict}"
+                       Style="{StaticResource ElementFieldEntry}"
+                       Placeholder="What stands in the way?"
+                       Unfocused="OnFieldUnfocused" />
+                <Label Text="OUTCOME" Style="{StaticResource InspectorSection}" />
+                <Entry Text="{Binding SelectedScene.Outcome}"
+                       Style="{StaticResource ElementFieldEntry}"
+                       Placeholder="How does it resolve?"
+                       Unfocused="OnFieldUnfocused" />
+
+                <!-- Viewpoint -->
+                <Label Text="VIEWPOINT" Style="{StaticResource InspectorSection}" />
+                <VerticalStackLayout BindableLayout.ItemsSource="{Binding ViewpointOptions}">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ViewpointOption">
+                            <HorizontalStackLayout Spacing="6">
+                                <CheckBox IsChecked="{Binding IsSelected}" Color="{StaticResource AccentPrimary}"
+                                          Scale="0.8" VerticalOptions="Center" />
+                                <Label Text="{Binding Character.Name}" TextColor="{StaticResource TextPrimary}"
+                                       FontSize="13" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                            </HorizontalStackLayout>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                    <BindableLayout.EmptyView>
+                        <Label Text="No characters yet — add them in Story Bible." Style="{StaticResource InspectorEmpty}" />
+                    </BindableLayout.EmptyView>
+                </VerticalStackLayout>
+
+                <!-- Who / where / what appears -->
+                <Label Text="CHARACTERS IN SCENE" Style="{StaticResource InspectorSection}" />
+                <VerticalStackLayout BindableLayout.ItemsSource="{Binding SceneCharacterOptions}">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="vm:SceneEntityOption">
+                            <HorizontalStackLayout Spacing="6">
+                                <CheckBox IsChecked="{Binding IsSelected}" Color="#A89EC9" Scale="0.8" VerticalOptions="Center" />
+                                <Label Text="{Binding Name}" TextColor="{StaticResource TextPrimary}" FontSize="13"
+                                       VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                                <Label Text="found in text" IsVisible="{Binding IsAutoDetected}" FontSize="10"
+                                       FontAttributes="Italic" TextColor="#A89EC9" VerticalOptions="Center" />
+                            </HorizontalStackLayout>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                    <BindableLayout.EmptyView>
+                        <Label Text="No characters yet — add them in Story Bible." Style="{StaticResource InspectorEmpty}" />
+                    </BindableLayout.EmptyView>
+                </VerticalStackLayout>
+
+                <Label Text="PLACES" Style="{StaticResource InspectorSection}" />
+                <VerticalStackLayout BindableLayout.ItemsSource="{Binding SceneLocationOptions}">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="vm:SceneEntityOption">
+                            <HorizontalStackLayout Spacing="6">
+                                <CheckBox IsChecked="{Binding IsSelected}" Color="#7EC8A4" Scale="0.8" VerticalOptions="Center" />
+                                <Label Text="{Binding Name}" TextColor="{StaticResource TextPrimary}" FontSize="13"
+                                       VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                                <Label Text="found in text" IsVisible="{Binding IsAutoDetected}" FontSize="10"
+                                       FontAttributes="Italic" TextColor="#7EC8A4" VerticalOptions="Center" />
+                            </HorizontalStackLayout>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                    <BindableLayout.EmptyView>
+                        <Label Text="No places yet — add them in Story Bible." Style="{StaticResource InspectorEmpty}" />
+                    </BindableLayout.EmptyView>
+                </VerticalStackLayout>
+
+                <Label Text="ITEMS" Style="{StaticResource InspectorSection}" />
+                <VerticalStackLayout BindableLayout.ItemsSource="{Binding SceneItemOptions}">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="vm:SceneEntityOption">
+                            <HorizontalStackLayout Spacing="6">
+                                <CheckBox IsChecked="{Binding IsSelected}" Color="#C8B07A" Scale="0.8" VerticalOptions="Center" />
+                                <Label Text="{Binding Name}" TextColor="{StaticResource TextPrimary}" FontSize="13"
+                                       VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                                <Label Text="found in text" IsVisible="{Binding IsAutoDetected}" FontSize="10"
+                                       FontAttributes="Italic" TextColor="#C8B07A" VerticalOptions="Center" />
+                            </HorizontalStackLayout>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                    <BindableLayout.EmptyView>
+                        <Label Text="No items yet — add them in Story Bible." Style="{StaticResource InspectorEmpty}" />
+                    </BindableLayout.EmptyView>
+                </VerticalStackLayout>
+
+                <!-- Notes -->
+                <Label Text="NOTES" Style="{StaticResource InspectorSection}" />
+                <Editor Text="{Binding SelectedScene.Notes}"
+                        Style="{StaticResource ElementFieldEditor}"
+                        HeightRequest="100"
+                        Placeholder="Anything to remember about this scene…"
+                        Unfocused="OnFieldUnfocused" />
+            </VerticalStackLayout>
+        </ScrollView>
+    </Grid>
+</ContentView>

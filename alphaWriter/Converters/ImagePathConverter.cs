@@ -1,3 +1,4 @@
+using alphaWriter.Services;
 using System.Globalization;
 
 namespace alphaWriter.Converters
@@ -8,7 +9,7 @@ namespace alphaWriter.Converters
         {
             if (value is string path && !string.IsNullOrEmpty(path))
             {
-                var fullPath = Path.Combine(FileSystem.AppDataDirectory, path);
+                var fullPath = Path.Combine(AppPaths.DataDirectory, path);
                 if (File.Exists(fullPath))
                     return ImageSource.FromFile(fullPath);
             }
