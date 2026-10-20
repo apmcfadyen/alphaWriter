@@ -1477,7 +1477,20 @@ namespace alphaWriter.ViewModels
                 dialogueRatio = Math.Round(r.Style.DialogueRatio, 3),
                 chapterSimilarity = Math.Round(r.ChapterSimilarity, 3),
                 noteCount = r.Notes.Count,
-                emotions = AggregateSceneEmotions(r)
+                emotions = AggregateSceneEmotions(r),
+                senses = r.Senses.Counts,
+                concreteness = r.Senses.Concreteness
+            }).ToList();
+
+            // Tension and mood across the book (scenes with real prose only)
+            var arc = Services.Nlp.Rules.TensionArc.Compute(_analysisResults).Select(p => new
+            {
+                title = p.Scene.SceneTitle,
+                chapter = p.Scene.ChapterTitle,
+                sceneId = p.Scene.SceneId,
+                tension = p.Tension,
+                smoothed = p.Smoothed,
+                mood = p.Mood
             }).ToList();
 
             var notes = NlpNotes.Select(n => new
@@ -1557,7 +1570,7 @@ namespace alphaWriter.ViewModels
             }).ToList();
 
             return System.Text.Json.JsonSerializer.Serialize(
-                new { scenes, notes, characterProfiles, dialogueProfiles },
+                new { scenes, notes, characterProfiles, dialogueProfiles, arc },
                 new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase });
         }
 

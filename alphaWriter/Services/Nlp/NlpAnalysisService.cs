@@ -67,6 +67,9 @@ namespace alphaWriter.Services.Nlp
             _posTaggingService = posTaggingService;
         }
 
+        // Live (synchronous) analysis reads SensoryLexicon.Default, so start loading it early
+        static NlpAnalysisService() => _ = SensoryLexicon.LoadDefaultAsync();
+
         private bool EmbeddingsAvailable =>
             _embeddingService is not null && _modelManager is not null
             && _modelManager.IsEmbeddingModelAvailable;
@@ -130,6 +133,8 @@ namespace alphaWriter.Services.Nlp
         {
             return Task.Run(async () =>
             {
+                await SensoryLexicon.LoadDefaultAsync();
+
                 // Load embedding model if available
                 if (EmbeddingsAvailable)
                 {
@@ -436,10 +441,15 @@ namespace alphaWriter.Services.Nlp
                 ViewpointCharacterIds = result.ViewpointCharacterIds,
                 TaggedCharacterIds = scene.CharacterIds?.ToList() ?? [],
                 Style = styleProfile,
-                Pacing = pacingMetrics
+                Pacing = pacingMetrics,
+                Senses = SensoryLexicon.Default
             };
             result.Notes.AddRange(Engine.EvaluateScene(ctx));
-            result.ParagraphBeats = BeatClassifier.Classify(document).Select(b => b.ToString()).ToList();
+            if (SensoryLexicon.Default is { } senses)
+                result.Senses = SensoryAnalyzer.Profile(document, senses);
+            var beats = BeatClassifier.Classify(document);
+            result.ParagraphBeats = beats.Select(b => b.ToString()).ToList();
+            result.Tension = TensionAnalyzer.Signals(document, beats);
 
             foreach (var note in result.Notes)
             {

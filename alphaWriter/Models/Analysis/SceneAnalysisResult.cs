@@ -19,6 +19,12 @@ namespace alphaWriter.Models.Analysis
         /// </summary>
         public List<string> ParagraphBeats { get; set; } = [];
 
+        /// <summary>Which senses the narration draws on, and how concrete it is.</summary>
+        public SensoryProfile Senses { get; set; } = new();
+
+        /// <summary>Text signals the book's tension arc is built from.</summary>
+        public TensionSignals Tension { get; set; } = new();
+
         // Populated in Phase 2 (embedding-based)
         public float ChapterSimilarity { get; set; }
 

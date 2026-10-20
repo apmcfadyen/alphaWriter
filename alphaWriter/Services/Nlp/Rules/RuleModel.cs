@@ -68,6 +68,9 @@ namespace alphaWriter.Services.Nlp.Rules
         /// <summary>Precomputed pacing metrics for the scene.</summary>
         public PacingMetrics Pacing { get; init; } = new();
 
+        /// <summary>Sense ratings per word, when the bundled norms are available.</summary>
+        public SensoryLexicon? Senses { get; init; }
+
         private HashSet<string>? _entityWords;
 
         /// <summary>

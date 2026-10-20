@@ -1,5 +1,20 @@
 # Reference corpus sources
 
+## Sensory lexicon
+
+`sensorimotor.tsv` (built by `build_sensorimotor.py`) keeps the six perceptual ratings
+(sound, taste, touch, inner body, smell, sight; 0–5) for 36,809 single words from:
+
+> Lynott, D., Connell, L., Brysbaert, M., Brand, J., & Carney, J. (2020). The Lancaster
+> Sensorimotor Norms: multidimensional measures of perceptual and action strength for
+> 40,000 English words. *Behavior Research Methods, 52*, 1271–1291.
+> https://doi.org/10.3758/s13428-019-01316-z
+
+Data from https://osf.io/7emr6/, licensed CC BY 4.0. Values are rounded to one decimal;
+multi-word items and the action-strength ratings are left out.
+
+## Typical-fiction word frequencies
+
 `fiction-frequencies.tsv` holds word counts only, computed from these public-domain
 Project Gutenberg ebooks (downloaded from a mirror, counted, then deleted).
 Because the corpus is 1780s–1920s fiction, words that did not exist then are

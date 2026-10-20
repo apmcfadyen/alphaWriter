@@ -33,9 +33,10 @@ param(
         "revise-station" = "book=first;scene=The Station at a Quarter Past Four;scope=scene;workspace=Revise"
         "revise-dev"     = "book=first;scene=The Fog Rolls In;scope=scene;workspace=Revise;filter=Developmental Editor"
         "insights"       = "book=first;insight=Problems;workspace=Insights"
+        "insights-report"= "book=first;analyze=on;insight=report:NLP"
         "book"           = "book=first;workspace=Book"
     },
-    [int] $StartupSeconds = 8,
+    [int] $StartupSeconds = 12,
     [int] $SettleSeconds = 2
 )
 

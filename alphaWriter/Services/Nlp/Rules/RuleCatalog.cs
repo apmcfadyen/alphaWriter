@@ -14,7 +14,7 @@ namespace alphaWriter.Services.Nlp.Rules
         /// Bump when scene-rule output changes, so cached per-scene results are recomputed
         /// instead of reused.
         /// </summary>
-        public const int EngineVersion = 4;
+        public const int EngineVersion = 5;
 
         private const NlpNoteCategory Copy = NlpNoteCategory.CopyEditor;
         private const NlpNoteCategory Line = NlpNoteCategory.LineEditor;
@@ -210,6 +210,26 @@ namespace alphaWriter.Services.Nlp.Rules
             "Chapters that end on a settled, quiet beat, especially several in a row in the middle of the book.",
             Dev, RuleTier.Book, RuleScope.Book);
 
+        public static readonly RuleDescriptor SensoryBalance = new(
+            "style.sensory-balance", "Sensory balance",
+            "Scenes told almost entirely through sight, with no sound, touch, smell or taste.",
+            Line, RuleTier.Lexical, RuleScope.Scene);
+
+        public static readonly RuleDescriptor AbstractPassages = new(
+            "style.abstract-passages", "Abstract passages",
+            "Narration paragraphs made of abstract words, with little to see, hear or touch.",
+            Line, RuleTier.Lexical, RuleScope.Scene);
+
+        public static readonly RuleDescriptor TensionSag = new(
+            "structure.tension-sag", "Sagging middle",
+            "A long run of the book’s quietest scenes in the middle, with little danger, conflict or urgency.",
+            Dev, RuleTier.Book, RuleScope.Book);
+
+        public static readonly RuleDescriptor ClimaxPlacement = new(
+            "structure.climax", "Climax placement",
+            "The book’s most intense stretch coming early, or an ending quieter than the middle.",
+            Dev, RuleTier.Book, RuleScope.Book);
+
         // ── Chapter comparisons ─────────────────────────────────────────────
 
         public static readonly RuleDescriptor SentenceLengthDrift = new(
@@ -318,6 +338,7 @@ namespace alphaWriter.Services.Nlp.Rules
             AmbiguousPronoun, TenseDrift, GestureTics, ConsistencySheet, SignatureWords,
             InfoDump, SceneGrounding, CharacterPresence, CharacterAbsence, AttributeContinuity,
             SetupPayoff, RepeatedPhrases, ChapterTimeCues, ChapterEndings,
+            SensoryBalance, AbstractPassages, TensionSag, ClimaxPlacement,
             SentenceLengthDrift, VocabularyDrift, ReadabilityDrift, SceneOutlier, TopicDrift, ToneShift,
             SceneCount, ChapterLength, DialogueBalance, ContractionShift, SceneOpening, SceneClosing,
             FormalityDrift, VocabularyPlateau, ActPacing, EmotionalFlatline, DialogueDesert,

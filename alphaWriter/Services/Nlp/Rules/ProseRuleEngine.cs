@@ -51,6 +51,8 @@ namespace alphaWriter.Services.Nlp.Rules
             new InfoDumpRule(),
             new SceneGroundingRule(),
             new CharacterPresenceRule(),
+            new SensoryBalanceRule(),
+            new AbstractPassageRule(),
         ],
         [
             new SceneCountRule(),
@@ -74,6 +76,8 @@ namespace alphaWriter.Services.Nlp.Rules
             new RepeatedPhraseRule(),
             new ChapterTimeCueRule(),
             new ChapterEndingRule(),
+            new TensionSagRule(),
+            new ClimaxPlacementRule(),
         ]);
 
         /// <summary>Tiers that can run for a document: POS rules need tagged tokens.</summary>
