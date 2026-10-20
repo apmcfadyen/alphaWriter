@@ -95,6 +95,9 @@ namespace alphaWriter.Views
         {
             base.OnAppearing();
             await _viewModel.InitializeAsync();
+#if DEBUG
+            _viewModel.ApplyUiStateFromEnvironment(); // tools/ui-snapshots
+#endif
             AttachGlobalDragSuppressor();
             AttachKeyboardShortcuts();
             RestoreSidebarWidth();
@@ -341,6 +344,9 @@ namespace alphaWriter.Views
                 {
                     await EditorWebView.EvaluateJavaScriptAsync($"setAnnotationsVisible({(MarksShown ? "true" : "false")})");
                     await EditorWebView.EvaluateJavaScriptAsync($"setAnnotations(JSON.parse({JsArg(json)}))");
+#if DEBUG
+                    await WriteAnnotationDiagnosticsAsync(json);
+#endif
                 });
             }
             catch (Exception ex)
@@ -348,6 +354,33 @@ namespace alphaWriter.Views
                 System.Diagnostics.Debug.WriteLine($"[EDITOR] setAnnotations failed: {ex.Message}");
             }
         }
+
+#if DEBUG
+        /// <summary>
+        /// Snapshot runs only (sandboxed data folder): records what the editor's annotation
+        /// layer did with the last push, so layout checks can tell "no notes" from "notes
+        /// that failed to render".
+        /// </summary>
+        private async Task WriteAnnotationDiagnosticsAsync(string pushedJson)
+        {
+            if (!AppPaths.IsSandboxed) return;
+            try
+            {
+                var state = await EditorWebView.EvaluateJavaScriptAsync(
+                    "JSON.stringify({ supported: _HL_SUPPORTED, visible: _annVisible, ready: _ready, " +
+                    "spans: (_annData && _annData.spans || []).length, ranges: _annRanges.length, " +
+                    "keys: (typeof CSS !== 'undefined' && CSS.highlights) ? Array.from(CSS.highlights.keys()) : null, " +
+                    "text: buildTextIndex(document.getElementById('editor')).text.slice(0, 400) })");
+                var line = $"{DateTime.Now:HH:mm:ss.fff} {state}{Environment.NewLine}pushed: {pushedJson[..Math.Min(pushedJson.Length, 600)]}{Environment.NewLine}";
+                await File.AppendAllTextAsync(Path.Combine(AppPaths.DataDirectory, "annotation-diagnostics.log"), line);
+            }
+            catch (Exception ex)
+            {
+                await File.AppendAllTextAsync(Path.Combine(AppPaths.DataDirectory, "annotation-diagnostics.log"),
+                    $"{DateTime.Now:HH:mm:ss.fff} diagnostics failed: {ex.Message}{Environment.NewLine}");
+            }
+        }
+#endif
 
         /// <summary>
         /// Encodes a string argument for an editor.html call. Never interpolate raw text or
