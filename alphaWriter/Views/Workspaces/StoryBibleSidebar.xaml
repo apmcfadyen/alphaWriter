@@ -1,0 +1,330 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+    Story Bible sidebar: Cast / Places / Items lists, with "find names in my text" scanning.
+-->
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:models="clr-namespace:alphaWriter.Models"
+             xmlns:analysis="clr-namespace:alphaWriter.Models.Analysis"
+             xmlns:vm="clr-namespace:alphaWriter.ViewModels"
+             xmlns:converters="clr-namespace:alphaWriter.Converters"
+             x:Class="alphaWriter.Views.Workspaces.StoryBibleSidebar">
+    <Grid RowDefinitions="Auto,*">
+        <!-- Story Bible: Cast / Places / Items (the highlighted tab is the list below) -->
+        <Grid Grid.Row="0" ColumnDefinitions="*,*,*" Padding="4,8,4,0">
+            <Button Grid.Column="0" Text="Cast"
+                    Style="{StaticResource SidebarTabButton}"
+                    BackgroundColor="{Binding IsCharactersMode, Converter={StaticResource SelectedTabConverter}}"
+                    TextColor="{Binding IsCharactersMode, Converter={StaticResource SelectedTabConverter}, ConverterParameter=text}"
+                    Command="{Binding SetSidebarModeCommand}"
+                    CommandParameter="Characters"
+                    ToolTipProperties.Text="Characters" />
+            <Button Grid.Column="1" Text="Places"
+                    Style="{StaticResource SidebarTabButton}"
+                    BackgroundColor="{Binding IsLocationsMode, Converter={StaticResource SelectedTabConverter}}"
+                    TextColor="{Binding IsLocationsMode, Converter={StaticResource SelectedTabConverter}, ConverterParameter=text}"
+                    Command="{Binding SetSidebarModeCommand}"
+                    CommandParameter="Locations"
+                    ToolTipProperties.Text="Locations" />
+            <Button Grid.Column="2" Text="Items"
+                    Style="{StaticResource SidebarTabButton}"
+                    BackgroundColor="{Binding IsItemsMode, Converter={StaticResource SelectedTabConverter}}"
+                    TextColor="{Binding IsItemsMode, Converter={StaticResource SelectedTabConverter}, ConverterParameter=text}"
+                    Command="{Binding SetSidebarModeCommand}"
+                    CommandParameter="Items"
+                    ToolTipProperties.Text="Items" />
+        </Grid>
+
+        <!-- Story Bible lists -->
+        <Grid Grid.Row="1">
+
+        <!-- ── Characters panel ── -->
+        <Grid IsVisible="{Binding IsCharactersMode}" RowDefinitions="Auto,Auto,*">
+            <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" Padding="0,4,4,0">
+                <Label Grid.Column="0" Text="CHARACTERS" Style="{StaticResource PanelHeaderLabel}" />
+                <Button Grid.Column="1" Text="⟳"
+                        Style="{StaticResource IconButton}"
+                        Command="{Binding ScanEntitiesCommand}"
+                        IsEnabled="{Binding HasSelectedBook}"
+                        ToolTipProperties.Text="Scan book for characters" />
+                <Button Grid.Column="2" Text="+"
+                        Style="{StaticResource IconButton}"
+                        Command="{Binding AddCharacterCommand}"
+                        IsEnabled="{Binding HasSelectedBook}"
+                        ToolTipProperties.Text="Add character" />
+            </Grid>
+            <!-- NER scan results -->
+            <Grid Grid.Row="1" RowDefinitions="Auto,Auto,Auto">
+                <ActivityIndicator Grid.Row="0"
+                                   IsRunning="{Binding IsScanning}"
+                                   IsVisible="{Binding IsScanning}"
+                                   HorizontalOptions="Center"
+                                   Margin="0,4" />
+                <Grid Grid.Row="1" IsVisible="{Binding HasCharacterCandidates}" RowDefinitions="Auto,Auto,Auto">
+                    <Label Grid.Row="0" Text="FOUND IN BOOK"
+                           Style="{StaticResource PanelHeaderLabel}"
+                           Margin="4,4,0,2" />
+                    <CollectionView Grid.Row="1"
+                                    ItemsSource="{Binding CharacterCandidates}"
+                                    MaximumHeightRequest="180">
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="vm:NerCandidateViewModel">
+                                <Grid ColumnDefinitions="Auto,*,Auto" Padding="0,1">
+                                    <CheckBox Grid.Column="0"
+                                              IsChecked="{Binding IsSelected}"
+                                              VerticalOptions="Center"
+                                              Margin="0,0,-85,0" />
+                                    <Label Grid.Column="1"
+                                           Text="{Binding Name}"
+                                           Style="{StaticResource ListItemLabel}"
+                                           LineBreakMode="TailTruncation"
+                                           VerticalOptions="Center"
+                                           Margin="0,0,0,0" />
+                                    <Label Grid.Column="2"
+                                           Text="{Binding CountLabel}"
+                                           FontSize="11"
+                                           TextColor="{StaticResource TextSecondary}"
+                                           VerticalOptions="Center"
+                                           Margin="2,0,4,0" />
+                                </Grid>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                    <Button Grid.Row="2"
+                            Text="Add Checked"
+                            Command="{Binding AddCheckedCharactersCommand}"
+                            HorizontalOptions="End"
+                            Margin="0,2,4,4"
+                            Style="{StaticResource IconButton}" />
+                </Grid>
+                <Label Grid.Row="2"
+                       Text="{Binding ScanProgress}"
+                       IsVisible="{Binding HasScanProgress}"
+                       FontSize="11"
+                       TextColor="{StaticResource TextSecondary}"
+                       LineBreakMode="WordWrap"
+                       Margin="4,2,4,4" />
+            </Grid>
+            <CollectionView Grid.Row="2"
+                            ItemsSource="{Binding SelectedBook.Characters}"
+                            SelectionMode="Single"
+                            SelectedItem="{Binding SelectedCharacter}">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="models:Character">
+                        <Grid ColumnDefinitions="*,Auto"
+                              BackgroundColor="Transparent"
+                              Padding="4,1">
+                            <Grid.GestureRecognizers>
+                                <TapGestureRecognizer
+                                    NumberOfTapsRequired="2"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:WriterViewModel}}, Path=RenameCharacterCommand}"
+                                    CommandParameter="{Binding .}" />
+                            </Grid.GestureRecognizers>
+                            <Label Grid.Column="0"
+                                   Text="{Binding Name}"
+                                   Style="{StaticResource ListItemLabel}"
+                                   LineBreakMode="TailTruncation" />
+                            <Button Grid.Column="1" Text="×"
+                                    Style="{StaticResource DangerIconButton}"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:WriterViewModel}}, Path=DeleteCharacterCommand}"
+                                    CommandParameter="{Binding .}" />
+                        </Grid>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+        </Grid>
+
+        <!-- ── Locations panel ── -->
+        <Grid IsVisible="{Binding IsLocationsMode}" RowDefinitions="Auto,Auto,*">
+            <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" Padding="0,4,4,0">
+                <Label Grid.Column="0" Text="LOCATIONS" Style="{StaticResource PanelHeaderLabel}" />
+                <Button Grid.Column="1" Text="⟳"
+                        Style="{StaticResource IconButton}"
+                        Command="{Binding ScanEntitiesCommand}"
+                        IsEnabled="{Binding HasSelectedBook}"
+                        ToolTipProperties.Text="Scan book for locations" />
+                <Button Grid.Column="2" Text="+"
+                        Style="{StaticResource IconButton}"
+                        Command="{Binding AddLocationCommand}"
+                        IsEnabled="{Binding HasSelectedBook}"
+                        ToolTipProperties.Text="Add location" />
+            </Grid>
+            <!-- NER scan results -->
+            <Grid Grid.Row="1" RowDefinitions="Auto,Auto,Auto">
+                <ActivityIndicator Grid.Row="0"
+                                   IsRunning="{Binding IsScanning}"
+                                   IsVisible="{Binding IsScanning}"
+                                   HorizontalOptions="Center"
+                                   Margin="0,4" />
+                <Grid Grid.Row="1" IsVisible="{Binding HasLocationCandidates}" RowDefinitions="Auto,Auto,Auto">
+                    <Label Grid.Row="0" Text="FOUND IN BOOK"
+                           Style="{StaticResource PanelHeaderLabel}"
+                           Margin="4,4,0,2" />
+                    <CollectionView Grid.Row="1"
+                                    ItemsSource="{Binding LocationCandidates}"
+                                    MaximumHeightRequest="180">
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="vm:NerCandidateViewModel">
+                                <Grid ColumnDefinitions="Auto,*,Auto" Padding="0,1">
+                                    <CheckBox Grid.Column="0"
+                                              IsChecked="{Binding IsSelected}"
+                                              VerticalOptions="Center"
+                                              Margin="0,0,-85,0" />
+                                    <Label Grid.Column="1"
+                                           Text="{Binding Name}"
+                                           Style="{StaticResource ListItemLabel}"
+                                           LineBreakMode="TailTruncation"
+                                           VerticalOptions="Center"
+                                           Margin="0,0,0,0" />
+                                    <Label Grid.Column="2"
+                                           Text="{Binding CountLabel}"
+                                           FontSize="11"
+                                           TextColor="{StaticResource TextSecondary}"
+                                           VerticalOptions="Center"
+                                           Margin="2,0,4,0" />
+                                </Grid>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                    <Button Grid.Row="2"
+                            Text="Add Checked"
+                            Command="{Binding AddCheckedLocationsCommand}"
+                            HorizontalOptions="End"
+                            Margin="0,2,4,4"
+                            Style="{StaticResource IconButton}" />
+                </Grid>
+                <Label Grid.Row="2"
+                       Text="{Binding ScanProgress}"
+                       IsVisible="{Binding HasScanProgress}"
+                       FontSize="11"
+                       TextColor="{StaticResource TextSecondary}"
+                       LineBreakMode="WordWrap"
+                       Margin="4,2,4,4" />
+            </Grid>
+            <CollectionView Grid.Row="2"
+                            ItemsSource="{Binding SelectedBook.Locations}"
+                            SelectionMode="Single"
+                            SelectedItem="{Binding SelectedLocation}">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="models:Location">
+                        <Grid ColumnDefinitions="*,Auto"
+                              BackgroundColor="Transparent"
+                              Padding="4,1">
+                            <Grid.GestureRecognizers>
+                                <TapGestureRecognizer
+                                    NumberOfTapsRequired="2"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:WriterViewModel}}, Path=RenameLocationCommand}"
+                                    CommandParameter="{Binding .}" />
+                            </Grid.GestureRecognizers>
+                            <Label Grid.Column="0"
+                                   Text="{Binding Name}"
+                                   Style="{StaticResource ListItemLabel}"
+                                   LineBreakMode="TailTruncation" />
+                            <Button Grid.Column="1" Text="×"
+                                    Style="{StaticResource DangerIconButton}"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:WriterViewModel}}, Path=DeleteLocationCommand}"
+                                    CommandParameter="{Binding .}" />
+                        </Grid>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+        </Grid>
+
+        <!-- ── Items panel ── -->
+        <Grid IsVisible="{Binding IsItemsMode}" RowDefinitions="Auto,Auto,*">
+            <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" Padding="0,4,4,0">
+                <Label Grid.Column="0" Text="ITEMS" Style="{StaticResource PanelHeaderLabel}" />
+                <Button Grid.Column="1" Text="⟳"
+                        Style="{StaticResource IconButton}"
+                        Command="{Binding ScanEntitiesCommand}"
+                        IsEnabled="{Binding HasSelectedBook}"
+                        ToolTipProperties.Text="Scan book for items" />
+                <Button Grid.Column="2" Text="+"
+                        Style="{StaticResource IconButton}"
+                        Command="{Binding AddItemCommand}"
+                        IsEnabled="{Binding HasSelectedBook}"
+                        ToolTipProperties.Text="Add item" />
+            </Grid>
+            <!-- NER scan results -->
+            <Grid Grid.Row="1" RowDefinitions="Auto,Auto,Auto">
+                <ActivityIndicator Grid.Row="0"
+                                   IsRunning="{Binding IsScanning}"
+                                   IsVisible="{Binding IsScanning}"
+                                   HorizontalOptions="Center"
+                                   Margin="0,4" />
+                <Grid Grid.Row="1" IsVisible="{Binding HasItemCandidates}" RowDefinitions="Auto,Auto,Auto">
+                    <Label Grid.Row="0" Text="FOUND IN BOOK"
+                           Style="{StaticResource PanelHeaderLabel}"
+                           Margin="4,4,0,2" />
+                    <CollectionView Grid.Row="1"
+                                    ItemsSource="{Binding ItemCandidates}"
+                                    MaximumHeightRequest="180">
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="vm:NerCandidateViewModel">
+                                <Grid ColumnDefinitions="Auto,*,Auto" Padding="0,1">
+                                    <CheckBox Grid.Column="0"
+                                              IsChecked="{Binding IsSelected}"
+                                              VerticalOptions="Center"
+                                              Margin="0,0,-85,0" />
+                                    <Label Grid.Column="1"
+                                           Text="{Binding Name}"
+                                           Style="{StaticResource ListItemLabel}"
+                                           LineBreakMode="TailTruncation"
+                                           VerticalOptions="Center"
+                                           Margin="0,0,0,0" />
+                                    <Label Grid.Column="2"
+                                           Text="{Binding CountLabel}"
+                                           FontSize="11"
+                                           TextColor="{StaticResource TextSecondary}"
+                                           VerticalOptions="Center"
+                                           Margin="2,0,4,0" />
+                                </Grid>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                    <Button Grid.Row="2"
+                            Text="Add Checked"
+                            Command="{Binding AddCheckedItemsCommand}"
+                            HorizontalOptions="End"
+                            Margin="0,2,4,4"
+                            Style="{StaticResource IconButton}" />
+                </Grid>
+                <Label Grid.Row="2"
+                       Text="{Binding ScanProgress}"
+                       IsVisible="{Binding HasScanProgress}"
+                       FontSize="11"
+                       TextColor="{StaticResource TextSecondary}"
+                       LineBreakMode="WordWrap"
+                       Margin="4,2,4,4" />
+            </Grid>
+            <CollectionView Grid.Row="2"
+                            ItemsSource="{Binding SelectedBook.Items}"
+                            SelectionMode="Single"
+                            SelectedItem="{Binding SelectedItem}">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="models:Item">
+                        <Grid ColumnDefinitions="*,Auto"
+                              BackgroundColor="Transparent"
+                              Padding="4,1">
+                            <Grid.GestureRecognizers>
+                                <TapGestureRecognizer
+                                    NumberOfTapsRequired="2"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:WriterViewModel}}, Path=RenameItemCommand}"
+                                    CommandParameter="{Binding .}" />
+                            </Grid.GestureRecognizers>
+                            <Label Grid.Column="0"
+                                   Text="{Binding Name}"
+                                   Style="{StaticResource ListItemLabel}"
+                                   LineBreakMode="TailTruncation" />
+                            <Button Grid.Column="1" Text="×"
+                                    Style="{StaticResource DangerIconButton}"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:WriterViewModel}}, Path=DeleteItemCommand}"
+                                    CommandParameter="{Binding .}" />
+                        </Grid>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+        </Grid>
+        </Grid>
+    </Grid>
+</ContentView>

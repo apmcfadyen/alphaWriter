@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+    Story Bible main area: edit the selected character, location or item.
+-->
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:models="clr-namespace:alphaWriter.Models"
+             xmlns:analysis="clr-namespace:alphaWriter.Models.Analysis"
+             xmlns:vm="clr-namespace:alphaWriter.ViewModels"
+             xmlns:converters="clr-namespace:alphaWriter.Converters"
+             x:Class="alphaWriter.Views.Workspaces.StoryBibleMain">
+    <Grid>
+        <!-- Element detail editor (visible when a character/location/item is selected) -->
+        <Grid Grid.Row="0"
+              IsVisible="{Binding IsElementEditorVisible}"
+              BackgroundColor="{StaticResource EditorBackground}"
+              RowDefinitions="Auto,*">
+
+            <!-- Element editor toolbar -->
+            <Grid Grid.Row="0"
+                  BackgroundColor="{StaticResource ToolbarBackground}"
+                  ColumnDefinitions="*,Auto"
+                  Padding="4,2">
+                <Label Grid.Column="0"
+                       Text="Story Bible"
+                       TextColor="{StaticResource TextPrimary}"
+                       FontSize="13"
+                       FontAttributes="Bold"
+                       Margin="8,0"
+                       VerticalOptions="Center" />
+                <Button Grid.Column="1" Text="✕ Deselect"
+                        Style="{StaticResource IconButton}"
+                        FontSize="12"
+                        Command="{Binding CloseElementEditorCommand}"
+                        ToolTipProperties.Text="Clear the selection" />
+            </Grid>
+
+            <ScrollView Grid.Row="1">
+            <VerticalStackLayout Padding="16,16,24,24" Spacing="12" MaximumWidthRequest="760" HorizontalOptions="Start">
+
+                <!-- ── Character editor ── -->
+                <VerticalStackLayout IsVisible="{Binding SelectedCharacter, Converter={StaticResource IsNotNullConverter}}"
+                                     Spacing="10">
+                    <Label Text="CHARACTER" Style="{StaticResource PanelHeaderLabel}" />
+
+                    <Label Text="Name" Style="{StaticResource FieldLabel}" />
+                    <Entry Text="{Binding SelectedCharacter.Name}"
+                           Style="{StaticResource ElementFieldEntry}"
+                           Placeholder="Character name"
+                           Unfocused="OnElementFieldUnfocused" />
+
+                    <Label Text="Full Name" Style="{StaticResource FieldLabel}" />
+                    <Entry Text="{Binding SelectedCharacter.FullName}"
+                           Style="{StaticResource ElementFieldEntry}"
+                           Placeholder="Full name"
+                           Unfocused="OnElementFieldUnfocused" />
+
+                    <Label Text="Description" Style="{StaticResource FieldLabel}" />
+                    <Editor Text="{Binding SelectedCharacter.Description}"
+                            Style="{StaticResource ElementFieldEditor}"
+                            Placeholder="Brief description"
+                            Unfocused="OnElementFieldUnfocused" />
+
+                    <Label Text="Bio" Style="{StaticResource FieldLabel}" />
+                    <Editor Text="{Binding SelectedCharacter.Bio}"
+                            Style="{StaticResource ElementFieldEditor}"
+                            HeightRequest="150"
+                            Placeholder="Character biography"
+                            Unfocused="OnElementFieldUnfocused" />
+
+                    <Label Text="Notes" Style="{StaticResource FieldLabel}" />
+                    <Editor Text="{Binding SelectedCharacter.Notes}"
+                            Style="{StaticResource ElementFieldEditor}"
+                            Placeholder="Additional notes"
+                            Unfocused="OnElementFieldUnfocused" />
+
+                    <Label Text="Also Known As" Style="{StaticResource FieldLabel}" />
+                    <Entry Text="{Binding SelectedCharacter.Aka}"
+                           Style="{StaticResource ElementFieldEntry}"
+                           Placeholder="Comma-separated aliases (e.g. John, Johnny, Mr. Smith)"
+                           Unfocused="OnElementFieldUnfocused" />
+
+                    <Label Text="Image" Style="{StaticResource FieldLabel}" />
+                    <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto">
+                        <Image Grid.Column="0"
+                               Source="{Binding SelectedCharacter.ImagePath, Converter={StaticResource ImagePathConverter}}"
+                               HeightRequest="120" Aspect="AspectFit"
+                               HorizontalOptions="Start" />
+                        <Button Grid.Column="1" Text="Browse..."
+                                Style="{StaticResource IconButton}"
+                                Command="{Binding PickCharacterImageCommand}"
+                                VerticalOptions="Start"
+                                ToolTipProperties.Text="Pick an image" />
+                    </Grid>
+                </VerticalStackLayout>
+
+                <!-- ── Location editor ── -->
+                <VerticalStackLayout IsVisible="{Binding SelectedLocation, Converter={StaticResource IsNotNullConverter}}"
+                                     Spacing="10">
+                    <Label Text="LOCATION" Style="{StaticResource PanelHeaderLabel}" />
+
+                    <Label Text="Name" Style="{StaticResource FieldLabel}" />
+                    <Entry Text="{Binding SelectedLocation.Name}"
+                           Style="{StaticResource ElementFieldEntry}"
+                           Placeholder="Location name"
+                           Unfocused="OnElementFieldUnfocused" />
+
+                    <Label Text="Description" Style="{StaticResource FieldLabel}" />
+                    <Editor Text="{Binding SelectedLocation.Description}"
+                            Style="{StaticResource ElementFieldEditor}"
+                            Placeholder="Brief description"
+                            Unfocused="OnElementFieldUnfocused" />
+
+                    <Label Text="Notes" Style="{StaticResource FieldLabel}" />
+                    <Editor Text="{Binding SelectedLocation.Notes}"
+                            Style="{StaticResource ElementFieldEditor}"
+                            Placeholder="Additional notes"
+                            Unfocused="OnElementFieldUnfocused" />
+
+                    <Label Text="Also Known As" Style="{StaticResource FieldLabel}" />
+                    <Entry Text="{Binding SelectedLocation.Aka}"
+                           Style="{StaticResource ElementFieldEntry}"
+                           Placeholder="Comma-separated aliases (e.g. NYC, the city)"
+                           Unfocused="OnElementFieldUnfocused" />
+
+                    <Label Text="Image" Style="{StaticResource FieldLabel}" />
+                    <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto">
+                        <Image Grid.Column="0"
+                               Source="{Binding SelectedLocation.ImagePath, Converter={StaticResource ImagePathConverter}}"
+                               HeightRequest="120" Aspect="AspectFit"
+                               HorizontalOptions="Start" />
+                        <Button Grid.Column="1" Text="Browse..."
+                                Style="{StaticResource IconButton}"
+                                Command="{Binding PickLocationImageCommand}"
+                                VerticalOptions="Start"
+                                ToolTipProperties.Text="Pick an image" />
+                    </Grid>
+                </VerticalStackLayout>
+
+                <!-- ── Item editor ── -->
+                <VerticalStackLayout IsVisible="{Binding SelectedItem, Converter={StaticResource IsNotNullConverter}}"
+                                     Spacing="10">
+                    <Label Text="ITEM" Style="{StaticResource PanelHeaderLabel}" />
+
+                    <Label Text="Name" Style="{StaticResource FieldLabel}" />
+                    <Entry Text="{Binding SelectedItem.Name}"
+                           Style="{StaticResource ElementFieldEntry}"
+                           Placeholder="Item name"
+                           Unfocused="OnElementFieldUnfocused" />
+
+                    <Label Text="Description" Style="{StaticResource FieldLabel}" />
+                    <Editor Text="{Binding SelectedItem.Description}"
+                            Style="{StaticResource ElementFieldEditor}"
+                            Placeholder="Brief description"
+                            Unfocused="OnElementFieldUnfocused" />
+
+                    <Label Text="Notes" Style="{StaticResource FieldLabel}" />
+                    <Editor Text="{Binding SelectedItem.Notes}"
+                            Style="{StaticResource ElementFieldEditor}"
+                            Placeholder="Additional notes"
+                            Unfocused="OnElementFieldUnfocused" />
+
+                    <Label Text="Also Known As" Style="{StaticResource FieldLabel}" />
+                    <Entry Text="{Binding SelectedItem.Aka}"
+                           Style="{StaticResource ElementFieldEntry}"
+                           Placeholder="Comma-separated aliases (e.g. the sword, Excalibur)"
+                           Unfocused="OnElementFieldUnfocused" />
+                </VerticalStackLayout>
+
+            </VerticalStackLayout>
+            </ScrollView>
+        </Grid>
+
+        <!-- Story Bible with nothing selected -->
+        <Grid IsVisible="{Binding IsStoryBibleEmpty}"
+              BackgroundColor="{StaticResource EditorBackground}">
+            <VerticalStackLayout Spacing="10" HorizontalOptions="Center" VerticalOptions="Center" Padding="24">
+                <Label Text="Story Bible" Style="{StaticResource EmptyStateTitle}" />
+                <Label Text="Your cast, places and items. Pick one from the list to edit it, add new ones with +, or use ⟳ to find names in your text."
+                       Style="{StaticResource EmptyStateMessage}" />
+            </VerticalStackLayout>
+        </Grid>
+    </Grid>
+</ContentView>

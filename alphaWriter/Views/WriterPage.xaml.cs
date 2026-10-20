@@ -1,3 +1,4 @@
+using alphaWriter.Services;
 using alphaWriter.Models;
 using alphaWriter.ViewModels;
 
@@ -7,9 +8,9 @@ namespace alphaWriter.Views
     {
         private WriterViewModel _viewModel;
         private bool _editorReady;
-        private bool _heatMapActive;
+        private bool _annotationsVisible = AppPreferences.Get("annotationsVisible", true);
         private Scene? _currentEditorScene; // The scene currently loaded in the WebView
-        private int? _pendingScrollSentenceIndex; // Set before a cross-scene note navigation; consumed by LoadSceneAsync
+        private Models.Analysis.NlpNote? _pendingFocusNote; // Set before a cross-scene note navigation; consumed by LoadSceneAsync
         private CancellationTokenSource? _sceneChangeCts; // Cancels a mid-flight scene change when a newer one supersedes it
 
         public WriterPage(WriterViewModel viewModel)
@@ -21,6 +22,73 @@ namespace alphaWriter.Views
             _viewModel.SelectedSceneChanged += OnSelectedSceneChanged;
             _viewModel.EntitiesChanged += () => _ = PushEntitiesAsync();
             _viewModel.ReportsPanelShown += () => _ = LoadReportAsync();
+            _viewModel.AnnotationsChanged += () => _ = PushAnnotationsAsync();
+            _viewModel.NoteNavigationRequested += OnNoteNavigationRequested;
+
+            // Scene inspector: remember whether the author keeps it open
+            _viewModel.IsMetadataPanelVisible = AppPreferences.Get("inspectorVisible", true);
+            _viewModel.PropertyChanged += OnViewModelPropertyChanged;
+            SizeChanged += OnPageSizeChanged;
+        }
+
+        // ── Orientation: window title, inspector, narrow layouts ─────────────
+
+        private const double NarrowWidth = 1100;
+        private bool _wasNarrow;
+        private bool _autoCollapsedInspector;
+        private bool _inspectorTuckedAway;
+
+        private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            switch (e.PropertyName)
+            {
+                case nameof(WriterViewModel.CurrentBookTitle):
+                    UpdateWindowTitle();
+                    break;
+                case nameof(WriterViewModel.ActiveWorkspace):
+                case nameof(WriterViewModel.HasSelectedScene):
+                    _ = ApplyMarksVisibilityAsync();
+                    break;
+                case nameof(WriterViewModel.IsMetadataPanelVisible) when !_autoCollapsedInspector:
+                    AppPreferences.Set("inspectorVisible", _viewModel.IsMetadataPanelVisible);
+                    _inspectorTuckedAway = false; // the author chose; don't override it
+                    break;
+            }
+        }
+
+        /// <summary>The OS title bar names the open book, so it is visible even in the taskbar.</summary>
+        private void UpdateWindowTitle()
+        {
+            if (Window is null) return;
+            Window.Title = _viewModel.SelectedBook is null
+                ? "alphaWriter"
+                : $"{_viewModel.CurrentBookTitle} — alphaWriter";
+        }
+
+        /// <summary>
+        /// Below ~1100 px there is no room for outline, editor and inspector side by side:
+        /// tuck the inspector away when the window becomes narrow, and bring it back when the
+        /// window widens again (unless the author closed it themselves in between).
+        /// </summary>
+        private void OnPageSizeChanged(object? sender, EventArgs e)
+        {
+            if (Width <= 0) return;
+            bool narrow = Width < NarrowWidth;
+            if (narrow && !_wasNarrow && _viewModel.IsMetadataPanelVisible)
+            {
+                _autoCollapsedInspector = true;
+                _viewModel.IsMetadataPanelVisible = false;
+                _autoCollapsedInspector = false;
+                _inspectorTuckedAway = true;
+            }
+            else if (!narrow && _wasNarrow && _inspectorTuckedAway)
+            {
+                _autoCollapsedInspector = true;
+                _viewModel.IsMetadataPanelVisible = true;
+                _autoCollapsedInspector = false;
+                _inspectorTuckedAway = false;
+            }
+            _wasNarrow = narrow;
         }
 
         protected override async void OnAppearing()
@@ -28,6 +96,9 @@ namespace alphaWriter.Views
             base.OnAppearing();
             await _viewModel.InitializeAsync();
             AttachGlobalDragSuppressor();
+            AttachKeyboardShortcuts();
+            RestoreSidebarWidth();
+            UpdateWindowTitle();
         }
 
         protected override async void OnDisappearing()
@@ -52,6 +123,7 @@ namespace alphaWriter.Views
                 e.Url.EndsWith("editor.html", StringComparison.OrdinalIgnoreCase))
             {
                 _editorReady = true;
+                UpdateAnnotationsButton();
                 // Load content if a scene is already selected, and track it so
                 // subsequent contentChanged notifications are not silently dropped.
                 if (_viewModel.SelectedScene is not null)
@@ -90,6 +162,24 @@ namespace alphaWriter.Views
                     targetScene.WordCount = jsWordCount.Value;
                 _viewModel.UpdateWordCountDisplay(targetScene);
                 _viewModel.DebouncedSave();
+                _viewModel.ScheduleLiveAnalysis(targetScene);
+            }
+            else if (e.Url.StartsWith("alphawriter://shortcut", StringComparison.OrdinalIgnoreCase))
+            {
+                // Forwarded from editor.html: the WebView swallows keys while focused
+                e.Cancel = true;
+                var key = ExtractQueryParam(e.Url, "k");
+                if (key is not null) _viewModel.HandleShortcut(key);
+            }
+            else if (e.Url.StartsWith("alphawriter://noteAction", StringComparison.OrdinalIgnoreCase))
+            {
+                e.Cancel = true;
+                _viewModel.ApplyNoteAction(
+                    ExtractQueryParam(e.Url, "action") ?? string.Empty,
+                    ExtractQueryParam(e.Url, "fp"),
+                    ExtractQueryParam(e.Url, "rule"),
+                    _currentEditorScene?.Id,
+                    ExtractQueryParam(e.Url, "word"));
             }
             else if (e.Url.StartsWith("alphawriter://entityClicked", StringComparison.OrdinalIgnoreCase))
             {
@@ -197,7 +287,6 @@ namespace alphaWriter.Views
             if (!_editorReady) return;
 
             var content    = scene.Content ?? string.Empty;
-            var contentArg = System.Text.Json.JsonSerializer.Serialize(content);
             System.Diagnostics.Debug.WriteLine($"[EDITOR] LoadScene: '{scene.Title}', content length={content.Length}");
 
             // 1. Set entities — pass the JSON array directly as a JS expression
@@ -205,7 +294,7 @@ namespace alphaWriter.Views
             try
             {
                 var entitiesJson = _viewModel.GetEntityManifestJson(); // e.g. [{"id":"...","name":"John",...}]
-                var entResult = await EditorWebView.EvaluateJavaScriptAsync($"setEntities({entitiesJson})");
+                var entResult = await EditorWebView.EvaluateJavaScriptAsync($"setEntities(JSON.parse({JsArg(entitiesJson)}))");
                 System.Diagnostics.Debug.WriteLine($"[EDITOR] LoadScene setEntities: {entResult} entities loaded");
             }
             catch (Exception ex)
@@ -214,7 +303,7 @@ namespace alphaWriter.Views
             }
 
             // 2. Set content (separate call — setContent applies entity highlighting internally)
-            await EditorWebView.EvaluateJavaScriptAsync($"setContent({contentArg})");
+            await EditorWebView.EvaluateJavaScriptAsync($"setContent({JsArg(content)})");
 
             // 3. Safety net: explicitly re-highlight after both entities and content are set.
             //    This catches any case where setContent's built-in highlighting didn't fire
@@ -225,18 +314,68 @@ namespace alphaWriter.Views
             }
             catch { /* non-critical */ }
 
-            // 4. Reapply heat map overlays if they were active before the scene switch.
-            await ReapplyHeatMapIfActiveAsync();
+            // 4. Editorial annotations: show what we already know about this scene, then
+            //    refresh the live rules against the text as it is now.
+            await PushAnnotationsAsync(scene.Id);
+            _viewModel.ScheduleLiveAnalysis(scene, delayMs: 0);
 
-            // 5. If a note-navigation jump is pending (set by NavigateToNoteAsync before
-            //    the scene switch), scroll to and flash-highlight the target sentence.
-            if (_pendingScrollSentenceIndex.HasValue)
+            // 5. If a note-navigation jump is pending (set before the scene switch),
+            //    scroll to and flash the note's words.
+            if (_pendingFocusNote is { } pending && pending.SceneId == scene.Id)
             {
-                var idx = _pendingScrollSentenceIndex.Value;
-                _pendingScrollSentenceIndex = null;
-                try { await EditorWebView.EvaluateJavaScriptAsync($"scrollToSentence({idx})"); }
-                catch { /* non-critical */ }
+                _pendingFocusNote = null;
+                await FocusNoteAsync(pending);
             }
+        }
+
+        // ── Editorial annotations ────────────────────────────────────────────
+
+        private async Task PushAnnotationsAsync(string? sceneId = null)
+        {
+            if (!_editorReady) return;
+            sceneId ??= _currentEditorScene?.Id;
+            var json = _viewModel.BuildAnnotationsJson(sceneId);
+            try
+            {
+                await MainThread.InvokeOnMainThreadAsync(async () =>
+                {
+                    await EditorWebView.EvaluateJavaScriptAsync($"setAnnotationsVisible({(MarksShown ? "true" : "false")})");
+                    await EditorWebView.EvaluateJavaScriptAsync($"setAnnotations(JSON.parse({JsArg(json)}))");
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[EDITOR] setAnnotations failed: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Encodes a string argument for an editor.html call. Never interpolate raw text or
+        /// JSON into scripts: MAUI's Windows WebView evaluates them via eval('...'), which
+        /// un-escapes once too often and breaks on quotes. editor.html decodes with decodeArg().
+        /// </summary>
+        private static string JsArg(string value) =>
+            $"decodeArg('{Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(value ?? string.Empty))}')";
+
+        private async Task FocusNoteAsync(Models.Analysis.NlpNote note)
+        {
+            if (string.IsNullOrEmpty(note.AnchorText)) return;
+            var json = WriterViewModel.BuildFocusJson(note);
+            try { await EditorWebView.EvaluateJavaScriptAsync($"focusAnnotation(JSON.parse({JsArg(json)}))"); }
+            catch { /* non-critical */ }
+        }
+
+        /// <summary>
+        /// Raised by the view-model just before it selects a note's scene. If the scene is
+        /// already open, focus now; otherwise LoadSceneAsync focuses once content is in.
+        /// </summary>
+        private async void OnNoteNavigationRequested(Models.Analysis.NlpNote note)
+        {
+            if (!_editorReady) return;
+            if (_currentEditorScene?.Id == note.SceneId)
+                await FocusNoteAsync(note);
+            else
+                _pendingFocusNote = note;
         }
 
         /// <summary>
@@ -248,7 +387,7 @@ namespace alphaWriter.Views
             if (!_editorReady) return;
             var entitiesJson = _viewModel.GetEntityManifestJson();
             await MainThread.InvokeOnMainThreadAsync(async () =>
-                await EditorWebView.EvaluateJavaScriptAsync($"setEntities({entitiesJson})"));
+                await EditorWebView.EvaluateJavaScriptAsync($"setEntities(JSON.parse({JsArg(entitiesJson)}))"));
         }
 
         // ── Report WebView ──────────────────────────────────────────────────
@@ -1189,6 +1328,90 @@ function navigateToNote(sceneId, sentenceIndex) {
         //  2. Set AllowDrop=false on the native WebView2 — WebView2 runs in its own
         //     Win32 HWND and doesn't propagate WinUI drag events up the tree, but it
         //     signals "Copy" to the OS by default; disabling AllowDrop stops that.
+        // ── Keyboard shortcuts ────────────────────────────────────────────────
+        // Ctrl+1…5 switch workspaces, Ctrl+\ toggles the sidebar. Registered as window-level
+        // accelerators; while the editor WebView has focus, editor.html forwards the same
+        // chords through alphawriter://shortcut (see OnEditorNavigating).
+
+        private bool _shortcutsAttached;
+
+        private void AttachKeyboardShortcuts()
+        {
+            if (_shortcutsAttached) return;
+            _shortcutsAttached = true;
+#if WINDOWS
+            if (Window?.Handler?.PlatformView is not Microsoft.UI.Xaml.Window nativeWindow ||
+                nativeWindow.Content is not Microsoft.UI.Xaml.UIElement root)
+                return;
+
+            // Keep WinUI from showing "Ctrl+1" style tooltips on the whole window
+            root.KeyboardAcceleratorPlacementMode =
+                Microsoft.UI.Xaml.Input.KeyboardAcceleratorPlacementMode.Hidden;
+
+            void Add(Windows.System.VirtualKey key, string shortcut)
+            {
+                var accelerator = new Microsoft.UI.Xaml.Input.KeyboardAccelerator
+                {
+                    Key = key,
+                    Modifiers = Windows.System.VirtualKeyModifiers.Control
+                };
+                accelerator.Invoked += (_, args) => args.Handled = _viewModel.HandleShortcut(shortcut);
+                root.KeyboardAccelerators.Add(accelerator);
+            }
+
+            Add(Windows.System.VirtualKey.Number1, "1");
+            Add(Windows.System.VirtualKey.Number2, "2");
+            Add(Windows.System.VirtualKey.Number3, "3");
+            Add(Windows.System.VirtualKey.Number4, "4");
+            Add(Windows.System.VirtualKey.Number5, "5");
+            Add((Windows.System.VirtualKey)220, "sidebar");   // VK_OEM_5: the \ key
+#endif
+        }
+
+        // ── Resizable sidebar ─────────────────────────────────────────────────
+
+        private const double MinSidebarWidth = 200;
+        private const double MaxSidebarWidth = 420;
+        private double _sidebarWidthAtPanStart;
+
+        private void RestoreSidebarWidth()
+        {
+            if (WriterViewModel.RemembersLayout &&
+                double.TryParse(_viewModel.UiStore.Get("sidebarWidth"), System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var width))
+            {
+                SidebarHost.WidthRequest = Math.Clamp(width, MinSidebarWidth, MaxSidebarWidth);
+            }
+#if WINDOWS
+            // Show the horizontal-resize cursor over the handle. ProtectedCursor is protected
+            // on UIElement, so it is set through reflection.
+            if (SidebarResizer.Handler?.PlatformView is Microsoft.UI.Xaml.UIElement handle)
+            {
+                typeof(Microsoft.UI.Xaml.UIElement)
+                    .GetProperty("ProtectedCursor", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?
+                    .SetValue(handle, Microsoft.UI.Input.InputSystemCursor.Create(Microsoft.UI.Input.InputSystemCursorShape.SizeWestEast));
+            }
+#endif
+        }
+
+        private void OnSidebarResizePan(object? sender, PanUpdatedEventArgs e)
+        {
+            switch (e.StatusType)
+            {
+                case GestureStatus.Started:
+                    _sidebarWidthAtPanStart = SidebarHost.Width > 0 ? SidebarHost.Width : SidebarHost.WidthRequest;
+                    break;
+                case GestureStatus.Running:
+                    SidebarHost.WidthRequest = Math.Clamp(_sidebarWidthAtPanStart + e.TotalX, MinSidebarWidth, MaxSidebarWidth);
+                    break;
+                case GestureStatus.Completed:
+                case GestureStatus.Canceled:
+                    _viewModel.UiStore.Set("sidebarWidth",
+                        SidebarHost.WidthRequest.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                    break;
+            }
+        }
+
         private void AttachGlobalDragSuppressor()
         {
             if (_dragSuppressorAttached) return;
@@ -1223,208 +1446,8 @@ function navigateToNote(sceneId, sentenceIndex) {
         }
 #endif
 
-        // ── Resizable splitter ──────────────────────────────────────────────────
-
-        private double _previousPanY;
-
-        private void OnSplitterPanUpdated(object? sender, PanUpdatedEventArgs e)
-        {
-            switch (e.StatusType)
-            {
-                case GestureStatus.Started:
-                    _previousPanY = 0;
-                    break;
-
-                case GestureStatus.Running:
-                    var delta = e.TotalY - _previousPanY;
-                    _previousPanY = e.TotalY;
-                    AdjustSplitRows(delta);
-                    break;
-            }
-        }
-
-        private void AdjustSplitRows(double deltaY)
-        {
-            var grid = EditorScenesGrid;
-            var totalHeight = grid.Height;
-            if (totalHeight <= 0) return;
-
-            var editorRow = grid.RowDefinitions[0];
-            var scenesRow = grid.RowDefinitions[2];
-
-            var totalStar = editorRow.Height.Value + scenesRow.Height.Value;
-            var usableHeight = totalHeight - 6.0;
-
-            var editorPx = (editorRow.Height.Value / totalStar) * usableHeight + deltaY;
-            var scenesPx = (scenesRow.Height.Value / totalStar) * usableHeight - deltaY;
-
-            const double minEditor = 120;
-            const double minScenes = 80;
-            editorPx = Math.Max(editorPx, minEditor);
-            scenesPx = Math.Max(scenesPx, minScenes);
-
-            var newTotal = editorPx + scenesPx;
-            editorRow.Height = new GridLength(editorPx / newTotal, GridUnitType.Star);
-            scenesRow.Height = new GridLength(scenesPx / newTotal, GridUnitType.Star);
-        }
-
-        // ── Drag-and-drop reordering ──────────────────────────────────────────
-
-        private Chapter? _draggingChapter;
-        private Scene?   _draggingScene;
-
-        private bool _chapterDropAfter;
-        private bool _sceneDropAfter;
-
-        // Returns true when the drag cursor is in the lower half of the hovered item.
-        private static bool IsCursorInBottomHalf(object? sender, DragEventArgs e)
-        {
-#if WINDOWS
-            if (e.PlatformArgs is PlatformDragEventArgs pd &&
-                pd.DragEventArgs is { } nativeArgs &&
-                sender is VisualElement ve &&
-                ve.Handler?.PlatformView is Microsoft.UI.Xaml.FrameworkElement nativeEl)
-            {
-                var pt = nativeArgs.GetPosition(nativeEl);
-                return pt.Y > nativeEl.ActualHeight / 2.0;
-            }
-#endif
-            return false;
-        }
-
-        // Row 0 = top drop indicator, Row 2 = bottom drop indicator.
-        // atBottom=true highlights the bottom edge.
-        private static void ShowDropIndicator(object? sender, bool atBottom = false)
-        {
-            if (sender is not Grid g || g.Children.Count < 2) return;
-            var top = g.Children[0]  as BoxView;
-            var bot = g.Children[^1] as BoxView;
-            if (top != null) top.IsVisible = false;
-            if (bot != null) bot.IsVisible = false;
-            if (atBottom && bot != null) bot.IsVisible = true;
-            else if (!atBottom && top != null) top.IsVisible = true;
-        }
-
-        private static void HideDropIndicator(object? sender)
-        {
-            if (sender is not Grid g) return;
-            if (g.Children.Count > 0 && g.Children[0] is BoxView top)   top.IsVisible = false;
-            if (g.Children.Count > 1 && g.Children[^ 1] is BoxView bot)  bot.IsVisible = false;
-        }
-
-        // Suppress the platform "Copy" callout/glyph that appears beside the cursor.
-        private static void SuppressDragCallout(DragEventArgs e)
-        {
-#if WINDOWS
-            if (e.PlatformArgs is PlatformDragEventArgs pd &&
-                pd.DragEventArgs?.DragUIOverride is { } ui)
-            {
-                ui.IsGlyphVisible   = false;
-                ui.IsCaptionVisible = false;
-                ui.IsContentVisible = false;
-            }
-#endif
-        }
-
-        // Chapters
-        private void OnChapterDragStarting(object? sender, DragStartingEventArgs e)
-        {
-            if (sender is Element el && el.BindingContext is Chapter chapter)
-                _draggingChapter = chapter;
-        }
-
-        private void OnChapterDragCompleted(object? sender, DropCompletedEventArgs e)
-        { _draggingChapter = null; _chapterDropAfter = false; }
-
-        private void OnChapterDragOver(object? sender, DragEventArgs e)
-        {
-            e.AcceptedOperation = DataPackageOperation.Copy;
-            if (sender is Element el && el.BindingContext is Chapter target)
-            {
-                var chapters = _viewModel.SelectedBook?.Chapters;
-                var isLast = chapters is { Count: > 0 } && chapters[^1] == target;
-                _chapterDropAfter = isLast && IsCursorInBottomHalf(sender, e);
-            }
-            ShowDropIndicator(sender, atBottom: _chapterDropAfter);
-            SuppressDragCallout(e);
-        }
-
-        private void OnChapterDragLeave(object? sender, DragEventArgs e)
-            => HideDropIndicator(sender);
-
-        private void OnChapterDrop(object? sender, DropEventArgs e)
-        {
-            HideDropIndicator(sender);
-            if (_draggingChapter is null) return;
-            if (sender is Element el && el.BindingContext is Chapter target && target != _draggingChapter)
-            {
-                var chapters = _viewModel.SelectedBook?.Chapters;
-                if (chapters is not null)
-                {
-                    var idx = chapters.IndexOf(target);
-                    if (_chapterDropAfter) idx++;
-                    _viewModel.MoveChapter(_draggingChapter, idx);
-                }
-            }
-            _draggingChapter = null;
-            _chapterDropAfter = false;
-        }
-
-        // Scenes
-        private void OnSceneDragStarting(object? sender, DragStartingEventArgs e)
-        {
-            if (sender is Element el && el.BindingContext is Scene scene)
-                _draggingScene = scene;
-        }
-
-        private void OnSceneDragCompleted(object? sender, DropCompletedEventArgs e)
-        { _draggingScene = null; _sceneDropAfter = false; }
-
-        private void OnSceneDragOver(object? sender, DragEventArgs e)
-        {
-            e.AcceptedOperation = DataPackageOperation.Copy;
-            if (sender is Element el && el.BindingContext is Scene target)
-            {
-                var scenes = _viewModel.SelectedChapter?.Scenes;
-                var isLast = scenes is { Count: > 0 } && scenes[^1] == target;
-                _sceneDropAfter = isLast && IsCursorInBottomHalf(sender, e);
-            }
-            ShowDropIndicator(sender, atBottom: _sceneDropAfter);
-            SuppressDragCallout(e);
-        }
-
-        private void OnSceneDragLeave(object? sender, DragEventArgs e)
-            => HideDropIndicator(sender);
-
-        private void OnSceneDrop(object? sender, DropEventArgs e)
-        {
-            HideDropIndicator(sender);
-            if (_draggingScene is null) return;
-            if (sender is Element el && el.BindingContext is Scene target && target != _draggingScene)
-            {
-                var scenes = _viewModel.SelectedChapter?.Scenes;
-                if (scenes is not null)
-                {
-                    var idx = scenes.IndexOf(target);
-                    if (_sceneDropAfter) idx++;
-                    _viewModel.MoveScene(_draggingScene, idx);
-                }
-            }
-            _draggingScene = null;
-            _sceneDropAfter = false;
-        }
-
         private void OnSceneTitleUnfocused(object sender, FocusEventArgs e)
             => _viewModel.SaveSceneTitle();
-
-        private void OnElementFieldUnfocused(object? sender, FocusEventArgs e)
-            => _viewModel.SaveElementDetails();
-
-        private void OnSceneMetadataUnfocused(object? sender, FocusEventArgs e)
-            => _viewModel.SaveSceneMetadata();
-
-        private void OnBookInfoFieldUnfocused(object? sender, FocusEventArgs e)
-            => _viewModel.SaveBookInfo();
 
         // ── Formatting toolbar ────────────────────────────────────────────────
 
@@ -1437,45 +1460,41 @@ function navigateToNote(sceneId, sentenceIndex) {
         private async void OnUnderlineClicked(object sender, EventArgs e)
             => await EditorWebView.EvaluateJavaScriptAsync("execFormat('underline')");
 
-        // ── Prose heat map overlay ────────────────────────────────────────────
+        // ── Editorial highlights toggle ──────────────────────────────────────
 
         private async void OnHeatMapClicked(object sender, EventArgs e)
         {
             if (!_editorReady) return;
 
-            _heatMapActive = !_heatMapActive;
-
-            // Update button visual state
-            if (HeatMapButton is not null)
-            {
-                HeatMapButton.Opacity = _heatMapActive ? 1.0 : 0.5;
-                HeatMapButton.BackgroundColor = _heatMapActive
-                    ? Color.FromArgb("#3A3A5A")
-                    : Colors.Transparent;
-            }
-
-            if (_heatMapActive)
-            {
-                var heatJson = _viewModel.BuildHeatMapJson();
-                if (!string.IsNullOrEmpty(heatJson))
-                    await EditorWebView.EvaluateJavaScriptAsync($"applyHeatMap({heatJson})");
-            }
-            else
-            {
-                await EditorWebView.EvaluateJavaScriptAsync("clearHeatMap()");
-            }
+            _annotationsVisible = !_annotationsVisible;
+            AppPreferences.Set("annotationsVisible", _annotationsVisible);
+            await ApplyMarksVisibilityAsync();
         }
 
-        /// <summary>
-        /// Called when a new scene is loaded into the editor — reapplies the heat map
-        /// if it was active so overlays appear on the new content.
-        /// </summary>
-        private async Task ReapplyHeatMapIfActiveAsync()
+        /// <summary>Marks are always shown in Revise; in Write they follow the toolbar toggle.</summary>
+        private bool MarksShown => _annotationsVisible || _viewModel.IsReviseWorkspace;
+
+        private void UpdateAnnotationsButton()
         {
-            if (!_heatMapActive || !_editorReady) return;
-            var heatJson = _viewModel.BuildHeatMapJson();
-            if (!string.IsNullOrEmpty(heatJson))
-                await EditorWebView.EvaluateJavaScriptAsync($"applyHeatMap({heatJson})");
+            if (HeatMapButton is null) return;
+            bool revise = _viewModel.IsReviseWorkspace;
+            HeatMapButton.Text = revise ? "Marks: always on in Revise" : MarksShown ? "Marks: on" : "Marks: off";
+            HeatMapButton.IsEnabled = !revise && _viewModel.HasSelectedScene;
+            HeatMapButton.BackgroundColor = MarksShown
+                ? Color.FromArgb("#3A3A5A")
+                : Colors.Transparent;
+        }
+
+        private async Task ApplyMarksVisibilityAsync()
+        {
+            UpdateAnnotationsButton();
+            if (!_editorReady) return;
+            try
+            {
+                await EditorWebView.EvaluateJavaScriptAsync(
+                    $"setAnnotationsVisible({(MarksShown ? "true" : "false")})");
+            }
+            catch { /* non-critical */ }
         }
 
         // ── Note navigation from report panel ─────────────────────────────────
@@ -1499,18 +1518,19 @@ function navigateToNote(sceneId, sentenceIndex) {
         /// Navigates the editor to the scene identified by <paramref name="sceneId"/>,
         /// then scrolls to and flash-highlights the sentence at <paramref name="sentenceIndex"/>.
         /// If the scene is already open, the scroll fires immediately.
-        /// If the scene must be switched, <see cref="_pendingScrollSentenceIndex"/> is set
+        /// If the scene must be switched, <see cref="_pendingFocusNote"/> is set
         /// so <see cref="LoadSceneAsync"/> applies the scroll after the content loads.
         /// </summary>
         private async Task NavigateToNoteAsync(string sceneId, int? sentenceIndex)
         {
             if (!_editorReady) return;
 
+            var note = _viewModel.FindNoteForSentence(sceneId, sentenceIndex);
+
             if (_currentEditorScene?.Id == sceneId)
             {
                 // Scene already loaded — jump directly
-                if (sentenceIndex.HasValue)
-                    await EditorWebView.EvaluateJavaScriptAsync($"scrollToSentence({sentenceIndex.Value})");
+                if (note is not null) await FocusNoteAsync(note);
                 return;
             }
 
@@ -1518,9 +1538,9 @@ function navigateToNote(sceneId, sentenceIndex) {
             var scene = FindSceneById(sceneId);
             if (scene is null) return;
 
-            // Store the pending index before triggering the scene switch so that
+            // Store the pending focus before triggering the scene switch so that
             // LoadSceneAsync (which runs on the SelectedSceneChanged path) can consume it.
-            _pendingScrollSentenceIndex = sentenceIndex;
+            _pendingFocusNote = note;
 
             await MainThread.InvokeOnMainThreadAsync(() =>
                 _viewModel.SelectedScene = scene);

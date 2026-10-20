@@ -10,7 +10,7 @@ namespace alphaWriter.Services
 
         public BookService()
         {
-            _filePath = Path.Combine(FileSystem.AppDataDirectory, "books.json");
+            _filePath = Path.Combine(AppPaths.DataDirectory, "books.json");
         }
 
         public async Task<List<Book>> LoadBooksAsync()

@@ -25,7 +25,7 @@ namespace alphaWriter.Services.Nlp
 
         public NlpCacheService()
         {
-            _cacheDir = Path.Combine(FileSystem.AppDataDirectory, "nlp-cache");
+            _cacheDir = Path.Combine(AppPaths.DataDirectory, "nlp-cache");
         }
 
         // Constructor for testing

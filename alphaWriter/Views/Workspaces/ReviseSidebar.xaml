@@ -1,0 +1,230 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+    Revise workspace sidebar: run the analysis, then walk through notes scene by scene.
+    The main area is the same editor as Write, with editorial marks always on, so a
+    note and the words it is about are on screen together.
+-->
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:alphaWriter.ViewModels"
+             xmlns:analysis="clr-namespace:alphaWriter.Models.Analysis"
+             xmlns:converters="clr-namespace:alphaWriter.Converters"
+             x:Class="alphaWriter.Views.Workspaces.ReviseSidebar">
+
+    <ContentView.Resources>
+        <converters:RuleTitleConverter x:Key="RuleTitle" />
+        <Style x:Key="SmallLink" TargetType="Button">
+            <Setter Property="BackgroundColor" Value="Transparent" />
+            <Setter Property="TextColor" Value="{StaticResource TextAccent}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Padding" Value="4,2" />
+            <Setter Property="BorderWidth" Value="0" />
+            <Setter Property="MinimumHeightRequest" Value="24" />
+        </Style>
+        <Style x:Key="FieldCaption" TargetType="Label">
+            <Setter Property="TextColor" Value="{StaticResource TextSecondary}" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="VerticalOptions" Value="Center" />
+        </Style>
+    </ContentView.Resources>
+
+    <Grid RowDefinitions="Auto,Auto,*">
+
+        <!-- Header -->
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Padding="0,4,4,0">
+            <Label Text="REVISE" Style="{StaticResource PanelHeaderLabel}" />
+            <Button Grid.Column="1"
+                    Text="{Binding RuleSettingsToggleText}"
+                    Style="{StaticResource IconButton}"
+                    FontSize="12"
+                    Command="{Binding ToggleRuleSettingsCommand}"
+                    ToolTipProperties.Text="Editorial settings: genre, rules, allowed words" />
+        </Grid>
+
+        <!-- Run + status -->
+        <VerticalStackLayout Grid.Row="1" Padding="10,2,10,6" Spacing="6"
+                             IsVisible="{Binding IsNotesListVisible}">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                <Button Text="Run analysis"
+                        Style="{StaticResource PrimaryActionButton}"
+                        HorizontalOptions="Fill"
+                        Padding="10,6"
+                        Command="{Binding RunAnalysisCommand}"
+                        ToolTipProperties.Text="Analyze the whole book for style, pacing and structure. Unchanged scenes are reused." />
+                <Button Grid.Column="1" Text="Cancel"
+                        Style="{StaticResource SidebarTabButton}"
+                        Command="{Binding CancelAnalysisCommand}"
+                        IsVisible="{Binding IsAnalyzing}" />
+            </Grid>
+            <ActivityIndicator IsRunning="{Binding IsAnalyzing}" IsVisible="{Binding IsAnalyzing}"
+                               Color="{StaticResource AccentPrimary}" HeightRequest="18" HorizontalOptions="Start" />
+            <Label Text="{Binding AnalysisProgress}"
+                   TextColor="{StaticResource TextSecondary}" FontSize="11" FontAttributes="Italic"
+                   LineBreakMode="WordWrap"
+                   IsVisible="{Binding AnalysisProgress, Converter={StaticResource IsNotNullOrEmptyConverter}}" />
+            <HorizontalStackLayout Spacing="2">
+                <Button Text="Download models" Style="{StaticResource SmallLink}"
+                        Command="{Binding DownloadModelsCommand}"
+                        ToolTipProperties.Text="Optional (~330 MB): adds emotion, tone-shift and topic analysis. Runs entirely on this computer." />
+                <Button Text="Open report" Style="{StaticResource SmallLink}"
+                        Command="{Binding ShowNlpReportCommand}"
+                        IsVisible="{Binding HasAnalysisResults}"
+                        ToolTipProperties.Text="Pacing, style, emotion and voice charts (Insights)" />
+                <Button Text="Clear" Style="{StaticResource SmallLink}"
+                        Command="{Binding ClearAnalysisCommand}"
+                        IsVisible="{Binding HasAnalysisResults}"
+                        ToolTipProperties.Text="Clear the analysis results" />
+            </HorizontalStackLayout>
+
+            <!-- Scope + filters -->
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="4">
+                <Button Grid.Column="0" Text="This scene"
+                        Style="{StaticResource SidebarTabButton}"
+                        BackgroundColor="{Binding ReviseScopeIsScene, Converter={StaticResource SelectedTabConverter}}"
+                        TextColor="{Binding ReviseScopeIsScene, Converter={StaticResource SelectedTabConverter}, ConverterParameter=text}"
+                        Command="{Binding SetReviseScopeCommand}" CommandParameter="scene"
+                        ToolTipProperties.Text="Only notes for the open scene" />
+                <Button Grid.Column="1" Text="Whole book"
+                        Style="{StaticResource SidebarTabButton}"
+                        BackgroundColor="{Binding ReviseScopeIsScene, Converter={StaticResource SelectedTabConverter}, ConverterParameter=False}"
+                        TextColor="{Binding ReviseScopeIsScene, Converter={StaticResource SelectedTabConverter}, ConverterParameter='False;text'}"
+                        Command="{Binding SetReviseScopeCommand}" CommandParameter="book"
+                        ToolTipProperties.Text="Notes for every scene, grouped by chapter" />
+            </Grid>
+            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="6">
+                <Label Grid.Row="0" Text="Editor" Style="{StaticResource FieldCaption}" />
+                <Picker Grid.Row="0" Grid.Column="1"
+                        ItemsSource="{Binding CategoryFilterOptions}"
+                        SelectedItem="{Binding SelectedCategoryFilter}"
+                        TextColor="{StaticResource TextPrimary}" FontSize="12" />
+                <Label Grid.Row="1" Text="Severity" Style="{StaticResource FieldCaption}" />
+                <Picker Grid.Row="1" Grid.Column="1"
+                        ItemsSource="{Binding SeverityFilterOptions}"
+                        SelectedItem="{Binding SelectedSeverityFilter}"
+                        TextColor="{StaticResource TextPrimary}" FontSize="12" />
+            </Grid>
+            <Label Text="{Binding ReviseSummary}" TextColor="{StaticResource TextSecondary}" FontSize="11" />
+        </VerticalStackLayout>
+
+        <!-- Notes, grouped by scene in reading order -->
+        <CollectionView Grid.Row="2"
+                        ItemsSource="{Binding ReviseNoteGroups}"
+                        IsGrouped="True"
+                        IsVisible="{Binding IsNotesListVisible}"
+                        SelectionMode="None"
+                        Margin="6,0,6,6">
+            <CollectionView.GroupHeaderTemplate>
+                <DataTemplate x:DataType="vm:NoteGroup">
+                    <Label Text="{Binding Header}"
+                           TextColor="{StaticResource TextSecondary}"
+                           FontSize="11"
+                           FontAttributes="Bold"
+                           LineBreakMode="TailTruncation"
+                           Margin="4,10,4,2"
+                           ToolTipProperties.Text="{Binding Title}" />
+                </DataTemplate>
+            </CollectionView.GroupHeaderTemplate>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="analysis:NlpNote">
+                    <Border StrokeShape="RoundRectangle 4"
+                            Stroke="{StaticResource SurfaceRaised}"
+                            BackgroundColor="{StaticResource SurfaceRaised}"
+                            Padding="8,6"
+                            Margin="0,2">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer
+                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:WriterViewModel}}, Path=NavigateToNoteCommand}"
+                                CommandParameter="{Binding .}" />
+                        </Border.GestureRecognizers>
+                        <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" RowSpacing="2">
+                            <BoxView Grid.Row="0" Grid.Column="0"
+                                     WidthRequest="8" HeightRequest="8" CornerRadius="4"
+                                     Color="{Binding CategoryColor}" VerticalOptions="Center"
+                                     ToolTipProperties.Text="{Binding CategoryLabel}" />
+                            <Label Grid.Row="0" Grid.Column="1"
+                                   Text="{Binding RuleId, Converter={StaticResource RuleTitle}}"
+                                   TextColor="{StaticResource TextSecondary}"
+                                   FontSize="11" FontAttributes="Bold"
+                                   LineBreakMode="TailTruncation"
+                                   ToolTipProperties.Text="{Binding CategoryLabel}" />
+                            <Button Grid.Row="0" Grid.Column="2"
+                                    Text="Ignore"
+                                    FontSize="10" Padding="6,0" HeightRequest="20" MinimumHeightRequest="20"
+                                    BackgroundColor="Transparent"
+                                    TextColor="{StaticResource TextSecondary}"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:WriterViewModel}}, Path=DismissNoteCommand}"
+                                    CommandParameter="{Binding .}"
+                                    ToolTipProperties.Text="Hide this note (stays hidden after re-analysis)" />
+                            <Label Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3"
+                                   Text="{Binding Message}"
+                                   TextColor="{StaticResource TextPrimary}"
+                                   FontSize="12"
+                                   LineBreakMode="WordWrap" />
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+            <CollectionView.EmptyView>
+                <Label Text="No notes here. Run an analysis, widen the scope to Whole book, or relax the filters."
+                       TextColor="{StaticResource TextSecondary}"
+                       FontSize="12" FontAttributes="Italic"
+                       LineBreakMode="WordWrap"
+                       Margin="8,12" />
+            </CollectionView.EmptyView>
+        </CollectionView>
+
+        <!-- Editorial settings (replaces the list while open) -->
+        <ScrollView Grid.Row="1" Grid.RowSpan="2" IsVisible="{Binding IsRuleSettingsVisible}">
+            <VerticalStackLayout Padding="12,4,12,12" Spacing="10">
+                <Label Text="Genre" TextColor="{StaticResource TextSecondary}" FontSize="12" FontAttributes="Bold" />
+                <Picker ItemsSource="{Binding GenreOptions}"
+                        SelectedItem="{Binding SelectedGenre}"
+                        TextColor="{StaticResource TextPrimary}" FontSize="12" />
+                <Label Text="Sets how strict pacing, sentence-length, adverb and clause rules are. Scene rules update as you edit; book-wide rules on the next analysis."
+                       TextColor="{StaticResource TextDisabled}" FontSize="11" LineBreakMode="WordWrap" />
+
+                <Label Text="Allowed words" TextColor="{StaticResource TextSecondary}" FontSize="12" FontAttributes="Bold" />
+                <Label Text="Invented terms, dialect, or deliberate repetition. Comma-separated. Never flagged."
+                       TextColor="{StaticResource TextDisabled}" FontSize="11" LineBreakMode="WordWrap" />
+                <Editor Text="{Binding AllowedWordsText}"
+                        AutoSize="TextChanges" MinimumHeightRequest="36" FontSize="12"
+                        TextColor="{StaticResource TextPrimary}"
+                        Placeholder="e.g. Kaelen, aether, wyrdstone" />
+                <Button Text="Save allowed words"
+                        Style="{StaticResource SidebarTabButton}"
+                        Command="{Binding SaveAllowedWordsCommand}"
+                        HorizontalOptions="Start" />
+
+                <Label Text="{Binding DismissedSummary}" TextColor="{StaticResource TextSecondary}" FontSize="12" />
+                <Button Text="Restore dismissed notes"
+                        Style="{StaticResource SidebarTabButton}"
+                        Command="{Binding RestoreDismissedCommand}"
+                        HorizontalOptions="Start"
+                        ToolTipProperties.Text="Show dismissed notes again and re-enable rules turned off for individual scenes" />
+
+                <Label Text="Rules" TextColor="{StaticResource TextSecondary}" FontSize="12" FontAttributes="Bold" />
+                <VerticalStackLayout BindableLayout.ItemsSource="{Binding RuleSettings}" Spacing="8">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="vm:RuleToggleViewModel">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                                <CheckBox IsChecked="{Binding IsEnabled}" VerticalOptions="Start"
+                                          Color="{StaticResource AccentPrimary}" />
+                                <VerticalStackLayout Grid.Column="1" Spacing="1">
+                                    <Label Text="{Binding Title}" TextColor="{StaticResource TextPrimary}"
+                                           FontSize="12" FontAttributes="Bold" LineBreakMode="WordWrap" />
+                                    <HorizontalStackLayout Spacing="6">
+                                        <Label Text="{Binding CategoryLabel}" TextColor="{StaticResource TextSecondary}" FontSize="10" />
+                                        <Label Text="·" TextColor="{StaticResource TextSecondary}" FontSize="10" />
+                                        <Label Text="{Binding TierLabel}" TextColor="{StaticResource TextSecondary}" FontSize="10" />
+                                    </HorizontalStackLayout>
+                                    <Label Text="{Binding Description}" TextColor="{StaticResource TextDisabled}"
+                                           FontSize="11" LineBreakMode="WordWrap" />
+                                </VerticalStackLayout>
+                            </Grid>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </VerticalStackLayout>
+            </VerticalStackLayout>
+        </ScrollView>
+    </Grid>
+</ContentView>

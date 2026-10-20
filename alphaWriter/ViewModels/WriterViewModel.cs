@@ -66,8 +66,6 @@ namespace alphaWriter.ViewModels
         [ObservableProperty]
         private bool isMetadataPanelVisible;
 
-        [ObservableProperty]
-        private bool isBookInfoVisible;
 
         [ObservableProperty]
         private SidebarMode sidebarMode = SidebarMode.Chapters;
@@ -93,11 +91,7 @@ namespace alphaWriter.ViewModels
         [ObservableProperty]
         private ObservableCollection<SceneEntityOption> sceneItemOptions = [];
 
-        [ObservableProperty]
-        private bool isStatsPanelVisible;
 
-        [ObservableProperty]
-        private bool isReportsPanelVisible;
 
         [ObservableProperty]
         private string activeStatsTab = "Frequency";
@@ -206,18 +200,53 @@ namespace alphaWriter.ViewModels
         public bool IsLocationsMode => SidebarMode == SidebarMode.Locations;
         public bool IsItemsMode => SidebarMode == SidebarMode.Items;
 
-        // Whether an element editor or scene editor should be visible
-        public bool IsElementEditorVisible => !IsBookInfoVisible
-                                           && !IsStatsPanelVisible
-                                           && !IsReportsPanelVisible
-                                           && (SelectedCharacter is not null
-                                           || SelectedLocation is not null
-                                           || SelectedItem is not null);
-        public bool IsSceneEditorVisible => !IsBookInfoVisible && !IsElementEditorVisible
-                                           && !IsStatsPanelVisible && !IsReportsPanelVisible;
+        // Main-area visibility (IsSceneEditorVisible, IsElementEditorVisible, …) is derived
+        // from ActiveWorkspace — see WriterViewModel.Workspaces.cs.
 
         // Display name for the book selector button
-        public string CurrentBookTitle => SelectedBook?.Title ?? "No Book";
+        public string CurrentBookTitle => SelectedBook?.Title ?? "No book open";
+
+        // ── Editor empty state ────────────────────────────────────────────────
+        // When no scene is open, the editor area explains what to do next instead
+        // of showing a blank page. One clear next step per situation.
+
+        public bool IsEditorEmpty => SelectedScene is null;
+
+        public string EditorEmptyTitle => SelectedBook switch
+        {
+            null => "No book open",
+            _ when IsReviseWorkspace => "Pick a note",
+            { Chapters.Count: 0 } => "Start your outline",
+            _ when SelectedChapter is null => "Choose a scene",
+            _ when SelectedChapter.Scenes.Count == 0 => $"“{SelectedChapter.Title}” has no scenes yet",
+            _ => "Choose a scene"
+        };
+
+        public string EditorEmptyMessage => SelectedBook switch
+        {
+            null => "Create a book to start writing, or switch to one you already have.",
+            _ when IsReviseWorkspace => HasAnalysisResults || NlpNotes.Count > 0
+                ? "Choose a note in the list to open its scene with the flagged words underlined."
+                : "Run an analysis to get editorial notes for the whole book, or open a scene in Write — its live notes appear as you edit.",
+            { Chapters.Count: 0 } => "Books are made of chapters, and chapters of scenes. Add your first chapter to begin.",
+            _ when SelectedChapter is null => "Pick a scene in the outline, or add one with + next to a chapter.",
+            _ when SelectedChapter.Scenes.Count == 0 => "Scenes are where the writing happens. Add one to open the editor.",
+            _ => "Pick a scene in the outline, or add a new one."
+        };
+
+        public bool ShowCreateBookAction => SelectedBook is null;
+        public bool ShowAddChapterAction => SelectedBook is { Chapters.Count: 0 } && !IsReviseWorkspace;
+        public bool ShowAddSceneAction => SelectedChapter is not null && !IsReviseWorkspace;
+
+        private void RefreshEditorEmptyState()
+        {
+            OnPropertyChanged(nameof(IsEditorEmpty));
+            OnPropertyChanged(nameof(EditorEmptyTitle));
+            OnPropertyChanged(nameof(EditorEmptyMessage));
+            OnPropertyChanged(nameof(ShowCreateBookAction));
+            OnPropertyChanged(nameof(ShowAddChapterAction));
+            OnPropertyChanged(nameof(ShowAddSceneAction));
+        }
 
         // ── Lifecycle ──────────────────────────────────────────────────────────
 
@@ -230,12 +259,15 @@ namespace alphaWriter.ViewModels
             Books = new ObservableCollection<Book>(loaded);
 
             // Restore last-opened book across sessions
-            var lastId = Preferences.Default.Get("lastBookId", string.Empty);
+            var lastId = AppPreferences.Get("lastBookId", string.Empty);
             if (!string.IsNullOrEmpty(lastId))
             {
                 var lastBook = Books.FirstOrDefault(b => b.Id == lastId);
                 if (lastBook is not null)
-                    SelectedBook = lastBook;
+                {
+                    SelectedBook = lastBook;   // also reopens its last scene
+                    RestoreWorkspace();
+                }
             }
         }
 
@@ -248,9 +280,9 @@ namespace alphaWriter.ViewModels
             SelectedCharacter = null;
             SelectedLocation = null;
             SelectedItem = null;
-            IsBookInfoVisible = false;
-            IsStatsPanelVisible = false;
-            IsReportsPanelVisible = false;
+            ActiveWorkspace = Workspace.Write;
+            InsightsShowsReport = false;
+            AttachOutline(value);
             OnPropertyChanged(nameof(HasSelectedBook));
             OnPropertyChanged(nameof(CurrentBookTitle));
 
@@ -263,33 +295,22 @@ namespace alphaWriter.ViewModels
             AnalysisProgress = "";
             AnalysisStatusText = "";
             OnPropertyChanged(nameof(HasAnalysisResults));
+            OnPropertyChanged(nameof(IsFilterRowVisible));
 
             // Auto-load persisted analysis for the newly selected book
+            IsRuleSettingsVisible = false;
+            RefreshEditorialSettings();
+            AnnotationsChanged?.Invoke();
+
             if (value is not null)
                 _ = TryLoadPersistedAnalysisAsync(value);
 
             // Persist last-opened book across sessions
-            Preferences.Default.Set("lastBookId", value?.Id ?? string.Empty);
+            AppPreferences.Set("lastBookId", value?.Id ?? string.Empty);
             UpdateBreadcrumb();
-        }
 
-        partial void OnIsBookInfoVisibleChanged(bool value)
-        {
-            OnPropertyChanged(nameof(IsElementEditorVisible));
-            OnPropertyChanged(nameof(IsSceneEditorVisible));
-        }
-
-        partial void OnIsStatsPanelVisibleChanged(bool value)
-        {
-            OnPropertyChanged(nameof(IsElementEditorVisible));
-            OnPropertyChanged(nameof(IsSceneEditorVisible));
-        }
-
-        partial void OnIsReportsPanelVisibleChanged(bool value)
-        {
-            OnPropertyChanged(nameof(IsElementEditorVisible));
-            OnPropertyChanged(nameof(IsSceneEditorVisible));
-            if (value) ReportsPanelShown?.Invoke();
+            // Pick up where the author left off in this book
+            if (value is not null) RestoreLastScene(value);
         }
 
         partial void OnActiveStatsTabChanged(string value)
@@ -299,6 +320,7 @@ namespace alphaWriter.ViewModels
             OnPropertyChanged(nameof(IsCharactersTab));
             OnPropertyChanged(nameof(IsDailyProgressTab));
             OnPropertyChanged(nameof(IsAnalysisTab));
+            OnPropertyChanged(nameof(ActiveInsight));
         }
 
         partial void OnSelectedCategoryFilterChanged(string value) => ApplyNoteFilters();
@@ -315,17 +337,17 @@ namespace alphaWriter.ViewModels
             SelectedScene = null;
             OnPropertyChanged(nameof(HasSelectedChapter));
             UpdateBreadcrumb();
+            SyncOutlineSelection();
         }
 
         partial void OnSelectedSceneChanged(Scene? value)
         {
-            if (value is not null)
-            {
-                SelectedCharacter = null;
-                SelectedLocation = null;
-                SelectedItem = null;
-            }
+            // Opening a scene shows the editor. Story Bible selections are left alone —
+            // each workspace keeps its own place.
+            if (value is not null && !IsEditorHostVisible)
+                ActiveWorkspace = Workspace.Write;
             WordCount = value?.WordCount ?? 0;
+            RememberScene(value);
 
             // Fire event FIRST so the WebView flush runs while the Grid is still visible.
             // The OnPropertyChanged calls below change IsSceneEditorVisible, which collapses
@@ -333,8 +355,9 @@ namespace alphaWriter.ViewModels
             SelectedSceneChanged?.Invoke(value);
 
             OnPropertyChanged(nameof(HasSelectedScene));
-            OnPropertyChanged(nameof(IsElementEditorVisible));
-            OnPropertyChanged(nameof(IsSceneEditorVisible));
+            OnPropertyChanged(nameof(IsInspectorVisible));
+            SyncOutlineSelection();
+            if (ReviseScopeIsScene) RebuildReviseGroups();
             RebuildViewpointOptions();
             RebuildSceneEntityOptions();
             UpdateBreadcrumb();
@@ -354,10 +377,9 @@ namespace alphaWriter.ViewModels
             {
                 SelectedLocation = null;
                 SelectedItem = null;
-                SelectedScene = null;
+                ActiveWorkspace = Workspace.StoryBible;
             }
-            OnPropertyChanged(nameof(IsElementEditorVisible));
-            OnPropertyChanged(nameof(IsSceneEditorVisible));
+            NotifyElementSelectionDerived();
         }
 
         partial void OnSelectedLocationChanged(Location? value)
@@ -366,10 +388,9 @@ namespace alphaWriter.ViewModels
             {
                 SelectedCharacter = null;
                 SelectedItem = null;
-                SelectedScene = null;
+                ActiveWorkspace = Workspace.StoryBible;
             }
-            OnPropertyChanged(nameof(IsElementEditorVisible));
-            OnPropertyChanged(nameof(IsSceneEditorVisible));
+            NotifyElementSelectionDerived();
         }
 
         partial void OnSelectedItemChanged(Item? value)
@@ -378,10 +399,9 @@ namespace alphaWriter.ViewModels
             {
                 SelectedCharacter = null;
                 SelectedLocation = null;
-                SelectedScene = null;
+                ActiveWorkspace = Workspace.StoryBible;
             }
-            OnPropertyChanged(nameof(IsElementEditorVisible));
-            OnPropertyChanged(nameof(IsSceneEditorVisible));
+            NotifyElementSelectionDerived();
         }
 
         // ── Book commands ──────────────────────────────────────────────────────
@@ -403,7 +423,7 @@ namespace alphaWriter.ViewModels
             Books.Remove(book);
 
             // Clean up stored images for this book
-            var imageDir = Path.Combine(FileSystem.AppDataDirectory, "images", book.Id);
+            var imageDir = Path.Combine(AppPaths.DataDirectory, "images", book.Id);
             if (Directory.Exists(imageDir))
             {
                 try { Directory.Delete(imageDir, recursive: true); }
@@ -488,6 +508,7 @@ namespace alphaWriter.ViewModels
             if (SelectedChapter == chapter)
                 SelectedChapter = null;
             SelectedBook.Chapters.Remove(chapter);
+            RefreshEditorEmptyState();
             await TriggerSaveAsync();
         }
 
@@ -523,10 +544,12 @@ namespace alphaWriter.ViewModels
         [RelayCommand]
         private async Task DeleteScene(Scene scene)
         {
-            if (SelectedChapter is null) return;
+            var chapter = FindChapterOf(scene);
+            if (chapter is null) return;
             if (SelectedScene == scene)
                 SelectedScene = null;
-            SelectedChapter.Scenes.Remove(scene);
+            chapter.Scenes.Remove(scene);
+            RefreshEditorEmptyState();
             await TriggerSaveAsync();
         }
 
@@ -538,10 +561,11 @@ namespace alphaWriter.ViewModels
             if (name is not null)
             {
                 scene.Title = name;
-                if (SelectedChapter is not null)
+                var owner = FindChapterOf(scene);
+                if (owner is not null)
                 {
-                    var idx = SelectedChapter.Scenes.IndexOf(scene);
-                    if (idx >= 0) { SelectedChapter.Scenes.RemoveAt(idx); SelectedChapter.Scenes.Insert(idx, scene); }
+                    var idx = owner.Scenes.IndexOf(scene);
+                    if (idx >= 0) { owner.Scenes.RemoveAt(idx); owner.Scenes.Insert(idx, scene); }
                 }
                 // Also update selected scene title entry if this is the current scene
                 if (SelectedScene == scene)
@@ -609,7 +633,12 @@ namespace alphaWriter.ViewModels
                 }
             }
 
+            // The last crumb is where the author is: shown as text, not a link
+            if (items.Count > 0)
+                items[^1].Command = null;
+
             BreadcrumbItems = items;
+            RefreshEditorEmptyState();
 
             // Also update the simple string format
             BreadcrumbPath = string.Join(" / ", items.Select(x => x.Label));
@@ -882,16 +911,13 @@ namespace alphaWriter.ViewModels
         private void ShowBookInfo()
         {
             if (SelectedBook is null) return;
-            SelectedCharacter = null;
-            SelectedLocation = null;
-            SelectedItem = null;
-            IsBookInfoVisible = true;
+            ActiveWorkspace = Workspace.Book;
         }
 
         [RelayCommand]
         private void CloseBookInfo()
         {
-            IsBookInfoVisible = false;
+            ActiveWorkspace = Workspace.Write;
         }
 
         public void SaveBookInfo() => TriggerSaveAsync().ConfigureAwait(false);
@@ -902,18 +928,14 @@ namespace alphaWriter.ViewModels
         private void ShowStatistics()
         {
             if (SelectedBook is null) return;
-            SelectedCharacter = null;
-            SelectedLocation = null;
-            SelectedItem = null;
-            IsBookInfoVisible = false;
-            ComputeStatistics();
-            IsStatsPanelVisible = true;
+            InsightsShowsReport = false;
+            ActiveWorkspace = Workspace.Insights;
         }
 
         [RelayCommand]
         private void CloseStatistics()
         {
-            IsStatsPanelVisible = false;
+            ActiveWorkspace = Workspace.Write;
         }
 
         [RelayCommand]
@@ -937,7 +959,9 @@ namespace alphaWriter.ViewModels
             try
             {
                 var progress = new Progress<string>(msg => AnalysisProgress = msg);
-                var (notes, results, profiles, dialogueProfiles) = await _nlpAnalysisService.AnalyzeBookAsync(SelectedBook, progress, ct);
+                // Unchanged scenes from the previous run are reused rather than re-analyzed
+                var (notes, results, profiles, dialogueProfiles) = await _nlpAnalysisService.AnalyzeBookAsync(
+                    SelectedBook, progress, ct, _analysisResults);
                 _analysisResults = results;
                 _allNotes = notes;
                 _voiceProfiles = profiles;
@@ -945,9 +969,10 @@ namespace alphaWriter.ViewModels
                 SelectedCategoryFilter = "All";
                 SelectedSeverityFilter = "All";
                 ApplyNoteFilters();
-                AnalysisProgress = $"Found {notes.Count} note{(notes.Count == 1 ? "" : "s")}.";
-                ActiveStatsTab = "Analysis";
+                AnalysisProgress = $"{AnalysisProgress} Found {NlpNotes.Count} note{(NlpNotes.Count == 1 ? "" : "s")}.";
+                AnnotationsChanged?.Invoke();
                 OnPropertyChanged(nameof(HasAnalysisResults));
+                OnPropertyChanged(nameof(IsFilterRowVisible));
 
                 // Populate inline scene analysis badges
                 PopulateSceneNoteCounts(notes);
@@ -984,7 +1009,9 @@ namespace alphaWriter.ViewModels
             SelectedCategoryFilter = "All";
             SelectedSeverityFilter = "All";
             OnPropertyChanged(nameof(HasAnalysisResults));
+            OnPropertyChanged(nameof(IsFilterRowVisible));
             ClearSceneNoteCounts();
+            AnnotationsChanged?.Invoke();
         }
 
         private async Task PersistAnalysisResultsAsync(
@@ -1029,8 +1056,10 @@ namespace alphaWriter.ViewModels
                 SelectedSeverityFilter = "All";
                 ApplyNoteFilters();
                 PopulateSceneNoteCounts(data.Notes);
-                AnalysisProgress = $"Found {data.Notes.Count} note{(data.Notes.Count == 1 ? "" : "s")}.";
+                AnalysisProgress = $"Found {NlpNotes.Count} note{(NlpNotes.Count == 1 ? "" : "s")}.";
                 OnPropertyChanged(nameof(HasAnalysisResults));
+                OnPropertyChanged(nameof(IsFilterRowVisible));
+                AnnotationsChanged?.Invoke();
 
                 // Check staleness
                 var stale = false;
@@ -1269,7 +1298,7 @@ namespace alphaWriter.ViewModels
                 return;
             }
 
-            IEnumerable<NlpNote> filtered = _allNotes;
+            IEnumerable<NlpNote> filtered = _allNotes.Where(IsNoteVisible);
 
             if (SelectedCategoryFilter != "All")
             {
@@ -1301,6 +1330,7 @@ namespace alphaWriter.ViewModels
               .ThenBy(n => n.SceneTitle);
 
             NlpNotes = new ObservableCollection<NlpNote>(sorted);
+            RebuildReviseGroups();
         }
 
         private void ClearSceneNoteCounts()
@@ -1343,12 +1373,8 @@ namespace alphaWriter.ViewModels
         {
             if (SelectedBook is null) return;
             ActiveReportType = "Entities";
-            SelectedCharacter = null;
-            SelectedLocation = null;
-            SelectedItem = null;
-            IsBookInfoVisible = false;
-            IsStatsPanelVisible = false;
-            IsReportsPanelVisible = true;
+            InsightsShowsReport = true;
+            ActiveWorkspace = Workspace.Insights;
         }
 
         [RelayCommand]
@@ -1356,12 +1382,8 @@ namespace alphaWriter.ViewModels
         {
             if (SelectedBook is null || _analysisResults is null || _analysisResults.Count == 0) return;
             ActiveReportType = "NLP";
-            SelectedCharacter = null;
-            SelectedLocation = null;
-            SelectedItem = null;
-            IsBookInfoVisible = false;
-            IsStatsPanelVisible = false;
-            IsReportsPanelVisible = true;
+            InsightsShowsReport = true;
+            ActiveWorkspace = Workspace.Insights;
         }
 
         [RelayCommand]
@@ -1375,7 +1397,7 @@ namespace alphaWriter.ViewModels
         [RelayCommand]
         private void CloseReports()
         {
-            IsReportsPanelVisible = false;
+            ActiveWorkspace = Workspace.Write;
         }
 
         public bool HasAnalysisResults => _analysisResults is not null && _analysisResults.Count > 0;
@@ -1390,9 +1412,15 @@ namespace alphaWriter.ViewModels
                 var scene = chapter.Scenes.FirstOrDefault(s => s.Id == note.SceneId);
                 if (scene is null) continue;
 
-                IsStatsPanelVisible = false;
-                SelectedChapter = chapter;
-                SelectedScene = scene;
+                // Make sure an editor is showing (Write or Revise), then let it record
+                // where to land before the scene switch loads it
+                if (!IsEditorHostVisible) ActiveWorkspace = Workspace.Write;
+                NoteNavigationRequested?.Invoke(note);
+                if (SelectedScene != scene)
+                {
+                    SelectedChapter = chapter;
+                    SelectedScene = scene;
+                }
                 return;
             }
         }
@@ -1403,7 +1431,7 @@ namespace alphaWriter.ViewModels
 
             // Build a lookup: sceneId -> count
             var countByScene = notes
-                .Where(n => !string.IsNullOrEmpty(n.SceneId))
+                .Where(n => !string.IsNullOrEmpty(n.SceneId) && IsNoteVisible(n))
                 .GroupBy(n => n.SceneId)
                 .ToDictionary(g => g.Key, g => g.Count());
 
@@ -1447,6 +1475,7 @@ namespace alphaWriter.ViewModels
                 chapter = n.ChapterTitle,
                 sceneId = n.SceneId,
                 sentenceIndex = n.SentenceIndex ?? -1,
+                fingerprint = n.Fingerprint,
                 message = n.Message
             }).ToList();
 
@@ -1516,81 +1545,6 @@ namespace alphaWriter.ViewModels
 
             return System.Text.Json.JsonSerializer.Serialize(
                 new { scenes, notes, characterProfiles, dialogueProfiles },
-                new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase });
-        }
-
-        /// <summary>
-        /// Builds per-sentence heat map data for the currently selected scene.
-        /// Returns a JSON object: { sentences: [{ index, flags: [] }], echoWords: ["word",...] }
-        /// where flags is a subset of: "passive", "adverbs", "show-dont-tell", "long", "echo"
-        /// </summary>
-        public string BuildHeatMapJson()
-        {
-            if (SelectedScene is null || _analysisResults is null) return "null";
-
-            var result = _analysisResults.FirstOrDefault(r => r.SceneId == SelectedScene.Id);
-            if (result is null) return "null";
-
-            // Gather per-sentence flags from existing analysis notes
-            var sentenceFlags = new Dictionary<int, List<string>>();
-
-            foreach (var note in result.Notes)
-            {
-                if (note.SentenceIndex is null) continue;
-                int idx = note.SentenceIndex.Value;
-                if (!sentenceFlags.TryGetValue(idx, out var flagList))
-                    sentenceFlags[idx] = flagList = [];
-
-                var msg = note.Message;
-                if (msg.Contains("passive", StringComparison.OrdinalIgnoreCase))
-                    flagList.Add("passive");
-                else if (msg.Contains("adverb", StringComparison.OrdinalIgnoreCase))
-                    flagList.Add("adverbs");
-                else if (msg.Contains("names the emotion", StringComparison.OrdinalIgnoreCase)
-                      || msg.Contains("show", StringComparison.OrdinalIgnoreCase) && msg.Contains("tell", StringComparison.OrdinalIgnoreCase))
-                    flagList.Add("show-dont-tell");
-                else if (msg.Contains("subordinate clause", StringComparison.OrdinalIgnoreCase))
-                    flagList.Add("complex");
-            }
-
-            // Unusually long sentences from the flags list on SentenceAnalysis
-            foreach (var s in result.Sentences)
-            {
-                if (s.Flags.Contains("unusually-long"))
-                {
-                    if (!sentenceFlags.TryGetValue(s.Index, out var fl)) sentenceFlags[s.Index] = fl = [];
-                    fl.Add("long");
-                }
-            }
-
-            // Echo words from proximity-echo notes (extract the quoted word)
-            var echoWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var note in result.Notes)
-            {
-                if (!note.Message.Contains("echoes", StringComparison.OrdinalIgnoreCase) &&
-                    !note.Message.Contains("times within five", StringComparison.OrdinalIgnoreCase)) continue;
-                // Message format: "'word' appears N times within..."
-                var firstQuote = note.Message.IndexOf('\'');
-                var secondQuote = note.Message.IndexOf('\'', firstQuote + 1);
-                if (firstQuote >= 0 && secondQuote > firstQuote)
-                    echoWords.Add(note.Message[(firstQuote + 1)..secondQuote]);
-
-                if (note.SentenceIndex.HasValue)
-                {
-                    if (!sentenceFlags.TryGetValue(note.SentenceIndex.Value, out var fl))
-                        sentenceFlags[note.SentenceIndex.Value] = fl = [];
-                    fl.Add("echo");
-                }
-            }
-
-            var sentences = sentenceFlags.Select(kv => new
-            {
-                index = kv.Key,
-                flags = kv.Value.Distinct().ToList()
-            }).OrderBy(x => x.index).ToList();
-
-            return System.Text.Json.JsonSerializer.Serialize(
-                new { sentences, echoWords = echoWords.ToList() },
                 new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase });
         }
 
@@ -2104,8 +2058,9 @@ namespace alphaWriter.ViewModels
 
         public void MoveScene(Scene scene, int desiredIndex)
         {
-            if (SelectedChapter is null) return;
-            var scenes = SelectedChapter.Scenes;
+            var chapter = FindChapterOf(scene);
+            if (chapter is null) return;
+            var scenes = chapter.Scenes;
             var oldIndex = scenes.IndexOf(scene);
             if (oldIndex < 0) return;
             var moveIndex = Math.Clamp(
@@ -2125,7 +2080,17 @@ namespace alphaWriter.ViewModels
             foreach (var book in Books)
                 book.DailyWordSnapshots[today] = book.WordCount;
 
-            await _bookService.SaveBooksAsync(Books.ToList());
+            SetSaveState("Saving…");
+            try
+            {
+                await _bookService.SaveBooksAsync(Books.ToList());
+                SetSaveState("All changes saved");
+            }
+            catch (Exception ex)
+            {
+                SetSaveState("Save failed — " + ex.Message.Split('\n')[0]);
+                throw;
+            }
         }
     }
 }

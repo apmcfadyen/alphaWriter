@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Insights workspace sidebar: one list of every statistic and report. -->
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:converters="clr-namespace:alphaWriter.Converters"
+             x:Class="alphaWriter.Views.Workspaces.InsightsSidebar">
+
+    <ContentView.Resources>
+        <converters:BoolToOpacityConverter x:Key="EnabledOpacity" />
+        <Style x:Key="InsightItem" TargetType="Border">
+            <Setter Property="StrokeThickness" Value="0" />
+            <Setter Property="StrokeShape" Value="RoundRectangle 4" />
+            <Setter Property="Padding" Value="12,6,12,6" />
+            <Setter Property="Margin" Value="4,1" />
+        </Style>
+        <Style x:Key="InsightSection" TargetType="Label">
+            <Setter Property="TextColor" Value="{StaticResource TextSecondary}" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontAttributes" Value="Bold" />
+            <Setter Property="Margin" Value="16,10,8,2" />
+        </Style>
+        <Style x:Key="InsightTitle" TargetType="Label">
+            <Setter Property="TextColor" Value="{StaticResource TextPrimary}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="LineBreakMode" Value="TailTruncation" />
+        </Style>
+        <Style x:Key="InsightHint" TargetType="Label">
+            <Setter Property="TextColor" Value="{StaticResource TextSecondary}" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Margin" Value="0,1,0,0" />
+            <Setter Property="LineBreakMode" Value="WordWrap" />
+        </Style>
+    </ContentView.Resources>
+
+    <ScrollView>
+        <VerticalStackLayout Padding="0,4,0,8">
+            <Label Text="INSIGHTS" Style="{StaticResource PanelHeaderLabel}" />
+            <Label Text="Words" Style="{StaticResource InsightSection}" />
+            <Border Style="{StaticResource InsightItem}"
+                    BackgroundColor="{Binding ActiveInsight, Converter={StaticResource SelectedTabConverter}, ConverterParameter='Frequency;row'}"
+                    SemanticProperties.Description="Word frequency">
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding OpenInsightCommand}" CommandParameter="Frequency" />
+                </Border.GestureRecognizers>
+                <VerticalStackLayout>
+                    <Label Text="Word frequency" Style="{StaticResource InsightTitle}" />
+                    <Label Text="Your 50 most-used words." Style="{StaticResource InsightHint}" />
+                </VerticalStackLayout>
+            </Border>
+            <Border Style="{StaticResource InsightItem}"
+                    BackgroundColor="{Binding ActiveInsight, Converter={StaticResource SelectedTabConverter}, ConverterParameter='Problems;row'}"
+                    SemanticProperties.Description="Problem words">
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding OpenInsightCommand}" CommandParameter="Problems" />
+                </Border.GestureRecognizers>
+                <VerticalStackLayout>
+                    <Label Text="Problem words" Style="{StaticResource InsightTitle}" />
+                    <Label Text="Words used more than 0.5% of the time." Style="{StaticResource InsightHint}" />
+                </VerticalStackLayout>
+            </Border>
+            <Border Style="{StaticResource InsightItem}"
+                    BackgroundColor="{Binding ActiveInsight, Converter={StaticResource SelectedTabConverter}, ConverterParameter='Characters;row'}"
+                    SemanticProperties.Description="Words by viewpoint">
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding OpenInsightCommand}" CommandParameter="Characters" />
+                </Border.GestureRecognizers>
+                <VerticalStackLayout>
+                    <Label Text="Words by viewpoint" Style="{StaticResource InsightTitle}" />
+                    <Label Text="How much of the book each POV character carries." Style="{StaticResource InsightHint}" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Label Text="Progress" Style="{StaticResource InsightSection}" />
+            <Border Style="{StaticResource InsightItem}"
+                    BackgroundColor="{Binding ActiveInsight, Converter={StaticResource SelectedTabConverter}, ConverterParameter='DailyProgress;row'}"
+                    SemanticProperties.Description="Daily progress">
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding OpenInsightCommand}" CommandParameter="DailyProgress" />
+                </Border.GestureRecognizers>
+                <VerticalStackLayout>
+                    <Label Text="Daily progress" Style="{StaticResource InsightTitle}" />
+                    <Label Text="Words written per day." Style="{StaticResource InsightHint}" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Label Text="Story" Style="{StaticResource InsightSection}" />
+            <Border Style="{StaticResource InsightItem}"
+                    BackgroundColor="{Binding ActiveInsight, Converter={StaticResource SelectedTabConverter}, ConverterParameter='report:Entities;row'}"
+                    SemanticProperties.Description="Story map">
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding OpenInsightCommand}" CommandParameter="report:Entities" />
+                </Border.GestureRecognizers>
+                <VerticalStackLayout>
+                    <Label Text="Story map" Style="{StaticResource InsightTitle}" />
+                    <Label Text="Which characters, places and items share scenes." Style="{StaticResource InsightHint}" />
+                </VerticalStackLayout>
+            </Border>
+            <Border Style="{StaticResource InsightItem}"
+                    BackgroundColor="{Binding ActiveInsight, Converter={StaticResource SelectedTabConverter}, ConverterParameter='report:NLP;row'}"
+                    Opacity="{Binding HasAnalysisResults, Converter={StaticResource EnabledOpacity}}"
+                    SemanticProperties.Description="Analysis report">
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding OpenInsightCommand}" CommandParameter="report:NLP" />
+                </Border.GestureRecognizers>
+                <VerticalStackLayout>
+                    <Label Text="Analysis report" Style="{StaticResource InsightTitle}" />
+                    <Label Text="Pacing, style, emotion and voice charts. Run an analysis in Revise first." Style="{StaticResource InsightHint}" />
+                </VerticalStackLayout>
+            </Border>
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentView>
