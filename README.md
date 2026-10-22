@@ -10,6 +10,22 @@ While it supports every aspect of novel writing from prewriting on, its ideal us
 
 In fact, I would not recommend this as a tool to write a novel from scratch. alphaWriter contains many reports of "vanity metrics" and little widgets that will actually distract from meaningful progress with Draft 1.
 
+## Building from source
+
+alphaWriter is a .NET MAUI app, developed and run on Windows.
+
+1. Install the [.NET 10 SDK](https://dotnet.microsoft.com/download) and the MAUI workload: `dotnet workload install maui`
+   (or Visual Studio 2022+ with the ".NET Multi-platform App UI development" workload).
+2. Clone the repository and build: `dotnet build alphaWriter/alphaWriter.csproj -f net10.0-windows10.0.19041.0`
+3. Run the tests: `dotnet test alphaWriter.Tests`
+
+Everything the editor needs is in the repository, including the bundled word lists in
+`alphaWriter/Resources/Raw/lexicons` (see `tools/reference-corpus/SOURCES.md` for their sources and licences).
+Part-of-speech tagging and entity recognition come from NuGet packages, restored on build. The optional
+emotion and embedding models (~330 MB) are not stored in the repository: download them from inside the app
+(Revise › Download models). Books, settings and analysis results live in the app's
+local data folder on each machine, so copy that folder if you want your library on another computer.
+
 ## Core Features:
 - Scene, Chapter, and Book aggregated wordcounts
 - Ability to set book wordcount goal with dynamic percentage of total
