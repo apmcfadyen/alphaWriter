@@ -12,11 +12,15 @@ namespace alphaWriter.ViewModels
     /// <c>book=first</c>, <c>scene=&lt;title&gt;</c>, <c>character=&lt;name&gt;</c>,
     /// <c>insight=&lt;Frequency|Problems|Characters|DailyProgress|report:Entities&gt;</c>,
     /// <c>scope=scene|book</c>, <c>inspector=on|off</c>, <c>sidebar=on|off</c>,
-    /// <c>settings=on</c>, <c>workspace=&lt;Write|StoryBible|Revise|Insights|Book&gt;</c>.
+    /// <c>settings=on</c>, <c>analyze=on</c> (runs a whole-book analysis), <c>section=&lt;report element id&gt;</c>, <c>passes=on</c>, <c>scan=on</c> (Story Bible entity scan), <c>export=on</c>, <c>pass=&lt;rule id&gt;</c>, <c>filter=&lt;editor&gt;</c>,
+    /// <c>workspace=&lt;Write|StoryBible|Revise|Insights|Book&gt;</c>.
     /// </remarks>
     public partial class WriterViewModel
     {
-        public void ApplyUiStateFromEnvironment()
+        /// <summary>Element id the analysis report scrolls to once loaded (<c>section=arc</c>).</summary>
+        public string? ReportScrollTarget { get; private set; }
+
+        public async Task ApplyUiStateFromEnvironment()
         {
             var spec = Environment.GetEnvironmentVariable(UiStateVariable);
             if (string.IsNullOrWhiteSpace(spec)) return;
@@ -49,6 +53,29 @@ namespace alphaWriter.ViewModels
                         break;
                     case "insight":
                         OpenInsight(value);
+                        break;
+                    case "analyze" when value == "on":
+                        await RunAnalysis();
+                        break;
+                    case "passes" when value == "on":
+                        if (!IsPassPickerVisible) TogglePassPicker();
+                        break;
+                    case "pass":
+                        RebuildPassOptions();
+                        StartPass(PassOptions.FirstOrDefault(o => o.RuleId == value));
+                        break;
+                    case "scan" when value == "on":
+                        await ScanEntities();
+                        break;
+                    case "export" when value == "on":
+                        try { await WriteSummaryAsync(); }   // written only; not opened
+                        catch (Exception ex) { AnalysisProgress = $"Export failed: {ex.Message}"; }
+                        break;
+                    case "section":
+                        ReportScrollTarget = value;
+                        break;
+                    case "filter":
+                        SelectedCategoryFilter = value;
                         break;
                     case "scope":
                         ReviseScopeIsScene = value == "scene";

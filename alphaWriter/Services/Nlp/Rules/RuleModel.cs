@@ -59,11 +59,17 @@ namespace alphaWriter.Services.Nlp.Rules
         public Book? Book { get; init; }
         public IReadOnlyList<string> ViewpointCharacterIds { get; init; } = [];
 
+        /// <summary>Characters the author tagged as appearing in this scene.</summary>
+        public IReadOnlyList<string> TaggedCharacterIds { get; init; } = [];
+
         /// <summary>Precomputed style profile for the scene (sentence length stats etc.).</summary>
         public StyleProfile Style { get; init; } = new();
 
         /// <summary>Precomputed pacing metrics for the scene.</summary>
         public PacingMetrics Pacing { get; init; } = new();
+
+        /// <summary>Sense ratings per word, when the bundled norms are available.</summary>
+        public SensoryLexicon? Senses { get; init; }
 
         private HashSet<string>? _entityWords;
 

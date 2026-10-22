@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Launches a Debug build of alphaWriter against a sandbox library, puts it into named UI
     states, and saves a PNG of the window at each requested size.
@@ -28,12 +28,18 @@ param(
         "write-empty"    = "book=first;workspace=Write"
         "write-quotes"   = "book=first;scene=Straight Quotes in the Ledger;workspace=Write"
         "storybible"     = "book=first;character=Eleonora;workspace=StoryBible"
+        "storybible-scan"= "book=first;scan=on;workspace=StoryBible"
         "revise"         = "book=first;scene=The Fog Rolls In;scope=scene;workspace=Revise"
         "revise-settings"= "book=first;settings=on;workspace=Revise"
+        "revise-station" = "book=first;scene=The Station at a Quarter Past Four;scope=scene;workspace=Revise"
+        "revise-dev"     = "book=first;scene=The Fog Rolls In;scope=scene;workspace=Revise;filter=Developmental Editor"
         "insights"       = "book=first;insight=Problems;workspace=Insights"
+        "insights-report"= "book=first;analyze=on;insight=report:NLP"
+        "revise-passes"  = "book=first;analyze=on;workspace=Revise;passes=on"
+        "revise-pass"    = "book=first;analyze=on;workspace=Revise;pass=style.show-dont-tell"
         "book"           = "book=first;workspace=Book"
     },
-    [int] $StartupSeconds = 8,
+    [int] $StartupSeconds = 12,
     [int] $SettleSeconds = 2
 )
 

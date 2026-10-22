@@ -58,6 +58,17 @@ namespace alphaWriter.Models.Analysis
         public List<string> Suggestions { get; set; } = [];
 
         /// <summary>
+        /// A one-click fix that isn't a text replacement, as "kind:value"
+        /// (e.g. "tag-character:&lt;id&gt;"). Empty when there is none.
+        /// </summary>
+        public string FixAction { get; set; } = string.Empty;
+
+        /// <summary>Button text for <see cref="FixAction"/> ("Tag Tomas in this scene").</summary>
+        public string FixActionLabel { get; set; } = string.Empty;
+
+        public bool HasFixAction => !string.IsNullOrEmpty(FixAction);
+
+        /// <summary>
         /// Hash of rule + evidence + anchor sentence. Survives edits elsewhere in the scene,
         /// so a dismissed note stays dismissed across re-analysis.
         /// </summary>

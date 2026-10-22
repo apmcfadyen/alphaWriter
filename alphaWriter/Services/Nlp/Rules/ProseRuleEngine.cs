@@ -48,6 +48,11 @@ namespace alphaWriter.Services.Nlp.Rules
             new AmbiguousPronounRule(),
             new TenseDriftRule(),
             new GestureRepeatRule(),
+            new InfoDumpRule(),
+            new SceneGroundingRule(),
+            new CharacterPresenceRule(),
+            new SensoryBalanceRule(),
+            new AbstractPassageRule(),
         ],
         [
             new SceneCountRule(),
@@ -65,6 +70,14 @@ namespace alphaWriter.Services.Nlp.Rules
             new GestureTicsBookRule(),
             new ConsistencySheetRule(),
             new SignatureWordsRule(),
+            new CharacterAbsenceRule(),
+            new AttributeContinuityRule(),
+            new SetupPayoffRule(),
+            new RepeatedPhraseRule(),
+            new ChapterTimeCueRule(),
+            new ChapterEndingRule(),
+            new TensionSagRule(),
+            new ClimaxPlacementRule(),
         ]);
 
         /// <summary>Tiers that can run for a document: POS rules need tagged tokens.</summary>

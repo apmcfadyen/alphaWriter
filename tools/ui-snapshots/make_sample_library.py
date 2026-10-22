@@ -27,7 +27,7 @@ def paragraphs(*ps: str) -> str:
 
 
 FOG = paragraphs(
-    "Maya walked quickly and quietly along the harbour wall. The fog rolled in from the water, "
+    "Maya's blue eyes stung in the cold. Maya walked quickly and quietly along the harbour wall. The fog rolled in from the water, "
     "and the fog swallowed the lamps one by one until the fog was all she could see.",
     "“You shouldn’t be out here,” Tomas said softly. He was leaning against the old "
     "customs house, the brass key turning in his fingers.",
@@ -35,8 +35,11 @@ FOG = paragraphs(
     "careful voices and the careful faces, tired of a town that had decided long before she was born "
     "what a harbourmaster’s daughter was for and had never once thought to ask her whether she "
     "agreed with any of it, or whether she had plans of her own.",
-    "“Then walk with me,” she said. // check Tomas's voice here",
+    "“Then walk with me,” she said. “Erik will want to hear about the key.” // check Tomas's voice here",
     "The door was opened by someone inside. Light spilled across the wet stones of the quay.",
+    # Names missing from the Story Bible, for the entity scan (one long, to test truncation)
+    "Captain Levinson watched from the boathouse, and Klio waved to him. Levinson did not wave back. "
+    "Behind them, Bartholomew Featherstonehaugh counted the crates again.",
 )
 
 STATION = paragraphs(
@@ -44,6 +47,16 @@ STATION = paragraphs(
     "Tomas waited on the bench with his collar up. The train was late. The train was always late.",
     "When it finally came, it came without a whistle, sliding out of the dark like something "
     "that did not want to be noticed.",
+    # Phase 2 triggers: untagged character in narration, a backstory run, eye colour
+    # (green here, blue in "The Fog Rolls In" below via Maya's description)
+    "Erik stepped down from the last carriage. Erik carried nothing but a lantern.",
+    "Years ago, Tomas had worked the night shift here. He had carried mail sacks and had "
+    "learned every timetable by heart before the line had closed.",
+    "His father had driven the trains before him, and had told him stories that had never "
+    "quite sounded true, about storms that had stopped engines on the coast road.",
+    "The company had promised a new line that had never come, and the town had waited "
+    "years for it before it had given up.",
+    "Maya's green eyes watched him from the platform.",
 )
 
 # Typed with a plain keyboard: straight quotes and apostrophes. These used to break

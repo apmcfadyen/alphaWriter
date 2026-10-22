@@ -30,6 +30,10 @@
     <None Include="..\alphaWriter\Resources\Raw\lexicons\fiction-frequencies.tsv"
           Link="lexicons\fiction-frequencies.tsv"
           CopyToOutputDirectory="PreserveNewest" />
+    <!-- The bundled Lancaster sensory norms, for SensoryRuleTests -->
+    <None Include="..\alphaWriter\Resources\Raw\lexicons\sensorimotor.tsv"
+          Link="lexicons\sensorimotor.tsv"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

@@ -96,7 +96,7 @@ namespace alphaWriter.Views
             base.OnAppearing();
             await _viewModel.InitializeAsync();
 #if DEBUG
-            _viewModel.ApplyUiStateFromEnvironment(); // tools/ui-snapshots
+            await _viewModel.ApplyUiStateFromEnvironment(); // tools/ui-snapshots
 #endif
             AttachGlobalDragSuppressor();
             AttachKeyboardShortcuts();
@@ -182,7 +182,8 @@ namespace alphaWriter.Views
                     ExtractQueryParam(e.Url, "fp"),
                     ExtractQueryParam(e.Url, "rule"),
                     _currentEditorScene?.Id,
-                    ExtractQueryParam(e.Url, "word"));
+                    ExtractQueryParam(e.Url, "word"),
+                    ExtractQueryParam(e.Url, "value"));
             }
             else if (e.Url.StartsWith("alphawriter://entityClicked", StringComparison.OrdinalIgnoreCase))
             {
@@ -459,6 +460,11 @@ namespace alphaWriter.Views
                     System.Diagnostics.Debug.WriteLine(
                         $"[REPORT] LoadReportAsync NLP: dataJson length={dataJson.Length}");
                     var html = BuildNlpReportHtml(_cachedChartJs ?? string.Empty, dataJson);
+#if DEBUG
+                    if (_viewModel.ReportScrollTarget is { } target)   // tools/ui-snapshots
+                        html = html.Replace("</body>",
+                            $"<script>document.getElementById('{target}').scrollIntoView();</" + "script></body>");
+#endif
                     await MainThread.InvokeOnMainThreadAsync(() =>
                         ReportWebView.Source = new HtmlWebViewSource { Html = html });
                 }
@@ -767,6 +773,9 @@ function init(data) {
     renderOverview();
     renderTriage();
     renderPacingHeatmap();
+    renderArc();
+    renderSenses();
+    renderBenchmarks();
     renderStyleChart();
     renderEmotions();
     renderCharFingerprint();
@@ -908,6 +917,97 @@ function renderEmotions() {
             key.charAt(0).toUpperCase()+key.slice(1)+'</div>';
     }
     html += '</div>';
+    el.innerHTML = html;
+}
+
+/* ── Story arc: tension (and mood, with the emotion model) per scene ───── */
+var _arcChart = null;
+function renderArc() {
+    var el = document.getElementById('arc');
+    var arc = _data.arc || [];
+    if (arc.length < 3 || typeof Chart === 'undefined') {
+        el.innerHTML = '<div class=""empty-state"">The arc needs at least three drafted scenes.</div>';
+        return;
+    }
+    var hasMood = arc.some(function(p){return p.mood !== null;});
+    el.innerHTML = '<div style=""height:220px;position:relative""><canvas id=""arcCanvas""></canvas></div>' +
+        '<div class=""emotion-legend"">' +
+        '<div class=""legend-item""><div class=""legend-dot"" style=""background:#E06C75""></div>Tension (3-scene average)</div>' +
+        '<div class=""legend-item""><div class=""legend-dot"" style=""background:#7A7A8A""></div>Tension per scene</div>' +
+        (hasMood ? '<div class=""legend-item""><div class=""legend-dot"" style=""background:#61AFEF""></div>Mood (dark to bright)</div>' : '') +
+        '</div><div style=""font-size:11px;color:#9E9AA0;margin-top:6px"">Tension is relative to this book: danger and conflict words, short sentences, action and heated dialogue' +
+        (hasMood ? ', plus tense emotions from the emotion model.' : '. Download the emotion model for mood and a sharper tension line.') + '</div>';
+    var labels = arc.map(function(p){return p.title;});
+    var datasets = [
+        { label:'Tension', data:arc.map(function(p){return p.smoothed;}), borderColor:'#E06C75',
+          backgroundColor:'rgba(224,108,117,.12)', fill:true, tension:.35, pointRadius:0, borderWidth:2, yAxisID:'y' },
+        { label:'Per scene', data:arc.map(function(p){return p.tension;}), borderColor:'#7A7A8A',
+          pointRadius:2, borderWidth:1, tension:.2, yAxisID:'y' }
+    ];
+    if (hasMood) datasets.push({ label:'Mood', data:arc.map(function(p){return p.mood;}), borderColor:'#61AFEF',
+          pointRadius:0, borderWidth:1.5, borderDash:[4,3], tension:.35, yAxisID:'mood' });
+    var scales = {
+        x: { ticks:{ color:'#9E9AA0', font:{size:9}, maxRotation:60, autoSkip:true }, grid:{ color:'#2A2A35' } },
+        y: { min:0, max:100, ticks:{ color:'#9E9AA0', font:{size:10} }, grid:{ color:'#2A2A35' } }
+    };
+    if (hasMood) scales.mood = { position:'right', min:-1, max:1, ticks:{ color:'#61AFEF', font:{size:10} }, grid:{ display:false } };
+    _arcChart = new Chart(document.getElementById('arcCanvas'), {
+        type:'line', data:{ labels:labels, datasets:datasets },
+        options:{ responsive:true, maintainAspectRatio:false, animation:false,
+            plugins:{ legend:{ display:false }, tooltip:{ callbacks:{
+                title:function(items){ var p = arc[items[0].dataIndex]; return p.title + ' (' + p.chapter + ')'; } } } },
+            scales:scales }
+    });
+}
+
+/* ── Genre guidelines ──────────────────────────────────────────────────── */
+function renderBenchmarks() {
+    var el = document.getElementById('benchmarks');
+    var rows = _data.benchmarks || [];
+    if (rows.length === 0) { el.innerHTML = '<div class=""empty-state"">No measurements yet.</div>'; return; }
+    var colors = { below:'#E5C07B', within:'#61C88A', above:'#E5C07B' };
+    var html = '<table style=""width:100%;border-collapse:collapse;font-size:12px"">' +
+        '<tr style=""color:#9E9AA0;text-align:left""><th style=""padding:4px 6px"">Measure</th><th>This book</th><th>Typical ' + escHtml(_data.genre || '') + '</th><th></th></tr>';
+    rows.forEach(function(r) {
+        html += '<tr style=""border-top:1px solid #3A3A48""><td style=""padding:6px"">' + escHtml(r.label) +
+            '<div style=""font-size:10px;color:#9E9AA0"">' + escHtml(r.advice) + '</div></td>' +
+            '<td style=""font-weight:600"">' + escHtml(r.value) + '</td><td style=""color:#9E9AA0"">' + escHtml(r.range) + '</td>' +
+            '<td style=""color:' + colors[r.verdict] + '"">' + r.verdict + '</td></tr>';
+    });
+    html += '</table><div style=""font-size:10px;color:#7A7A8A;margin-top:6px"">Rules of thumb, not measurements of published books. Change the genre in Revise settings.</div>';
+    el.innerHTML = html;
+}
+
+/* ── Sensory palette per scene ─────────────────────────────────────────── */
+var SENSE_NAMES = ['Sound','Taste','Touch','Body','Smell','Sight'];
+var SENSE_COLORS = ['#E5C07B','#C678DD','#D19A66','#E06C75','#98C379','#61AFEF'];
+function renderSenses() {
+    var el = document.getElementById('senses');
+    var scenes = (_data.scenes || []).filter(function(s){
+        return s.senses && s.senses.reduce(function(a,b){return a+b;},0) >= 5; });
+    if (scenes.length === 0) {
+        el.innerHTML = '<div class=""empty-state"">No sensory data yet: re-run analysis.</div>';
+        return;
+    }
+    var html = '';
+    scenes.forEach(function(sc) {
+        var total = sc.senses.reduce(function(a,b){return a+b;},0);
+        html += '<div style=""display:flex;align-items:center;gap:8px;margin-bottom:4px;"">';
+        html += '<div style=""width:80px;font-size:11px;color:#9E9AA0;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"" title=""'+escHtml(sc.title)+' ('+escHtml(sc.chapter)+')"">'+escHtml(sc.title)+'</div>';
+        html += '<div class=""emotion-row"" style=""flex:1;"">';
+        sc.senses.forEach(function(n, i) {
+            if (n === 0) return;
+            var pct = 100 * n / total;
+            html += '<div class=""emotion-seg"" style=""width:'+pct.toFixed(1)+'%;background:'+SENSE_COLORS[i]+'"" title=""'+SENSE_NAMES[i]+': '+n+' words""></div>';
+        });
+        html += '</div><div style=""width:36px;font-size:10px;color:#9E9AA0"" title=""Concreteness: how strongly the narration can be seen, heard or touched (0-5)"">'+(sc.concreteness||0).toFixed(1)+'</div></div>';
+    });
+    html += '<div class=""emotion-legend"">';
+    SENSE_NAMES.forEach(function(n, i) {
+        html += '<div class=""legend-item""><div class=""legend-dot"" style=""background:'+SENSE_COLORS[i]+'""></div>'+n+'</div>';
+    });
+    html += '<div class=""legend-item"">Number: concreteness (0-5)</div></div>';
+    html += '<div style=""font-size:10px;color:#7A7A8A;margin-top:6px"">Sense ratings: Lancaster Sensorimotor Norms (Lynott et al., 2020), CC BY 4.0.</div>';
     el.innerHTML = html;
 }
 
@@ -1305,6 +1405,15 @@ function navigateToNote(sceneId, sentenceIndex) {
     <h2>Pacing Heatmap</h2>
     <div id=""pacing"" class=""chart-area""></div>
 
+    <h2>Story Arc</h2>
+    <div id=""arc"" class=""chart-area""></div>
+
+    <h2>Genre Guidelines</h2>
+    <div id=""benchmarks"" class=""chart-area""></div>
+
+    <h2>Sensory Palette</h2>
+    <div id=""senses"" class=""chart-area""></div>
+
     <h2>Style Consistency</h2>
     <div id=""style"" class=""chart-area""></div>
 
@@ -1381,12 +1490,13 @@ function navigateToNote(sceneId, sentenceIndex) {
             root.KeyboardAcceleratorPlacementMode =
                 Microsoft.UI.Xaml.Input.KeyboardAcceleratorPlacementMode.Hidden;
 
-            void Add(Windows.System.VirtualKey key, string shortcut)
+            void Add(Windows.System.VirtualKey key, string shortcut,
+                Windows.System.VirtualKeyModifiers modifiers = Windows.System.VirtualKeyModifiers.Control)
             {
                 var accelerator = new Microsoft.UI.Xaml.Input.KeyboardAccelerator
                 {
                     Key = key,
-                    Modifiers = Windows.System.VirtualKeyModifiers.Control
+                    Modifiers = modifiers
                 };
                 accelerator.Invoked += (_, args) => args.Handled = _viewModel.HandleShortcut(shortcut);
                 root.KeyboardAccelerators.Add(accelerator);
@@ -1398,6 +1508,8 @@ function navigateToNote(sceneId, sentenceIndex) {
             Add(Windows.System.VirtualKey.Number4, "4");
             Add(Windows.System.VirtualKey.Number5, "5");
             Add((Windows.System.VirtualKey)220, "sidebar");   // VK_OEM_5: the \ key
+            Add(Windows.System.VirtualKey.F8, "next", Windows.System.VirtualKeyModifiers.None);
+            Add(Windows.System.VirtualKey.F8, "prev", Windows.System.VirtualKeyModifiers.Shift);
 #endif
         }
 

@@ -74,6 +74,13 @@ namespace alphaWriter.Models
         public List<string> LocationIds  { get; set; } = new();
         public List<string> ItemIds      { get; set; } = new();
 
+        /// <summary>
+        /// Characters, locations and items the author removed from this scene by hand.
+        /// Auto-detection never adds these back, even when their name is in the text
+        /// (e.g. someone who is only talked about).
+        /// </summary>
+        public List<string> UntaggedIds  { get; set; } = new();
+
         private string _goal = string.Empty;
         public string Goal
         {

@@ -67,6 +67,9 @@ namespace alphaWriter.Services.Nlp
             _posTaggingService = posTaggingService;
         }
 
+        // Live (synchronous) analysis reads SensoryLexicon.Default, so start loading it early
+        static NlpAnalysisService() => _ = SensoryLexicon.LoadDefaultAsync();
+
         private bool EmbeddingsAvailable =>
             _embeddingService is not null && _modelManager is not null
             && _modelManager.IsEmbeddingModelAvailable;
@@ -130,6 +133,8 @@ namespace alphaWriter.Services.Nlp
         {
             return Task.Run(async () =>
             {
+                await SensoryLexicon.LoadDefaultAsync();
+
                 // Load embedding model if available
                 if (EmbeddingsAvailable)
                 {
@@ -306,7 +311,7 @@ namespace alphaWriter.Services.Nlp
             result = null!;
             if (!previous.TryGetValue(scene.Id, out var prev)) return false;
             if (prev.EngineVersion != RuleCatalog.EngineVersion) return false;
-            if (prev.ContentHash != NlpCacheService.ComputeHash(scene.Content ?? string.Empty)) return false;
+            if (prev.ContentHash != SceneHash(scene)) return false;
             if (prev.SceneTitle != scene.Title || prev.ChapterTitle != chapter.Title) return false;
             if (LoadedPos is not null && !prev.HadPos) return false;
 
@@ -333,6 +338,16 @@ namespace alphaWriter.Services.Nlp
             result = prev;
             return true;
         }
+
+        /// <summary>
+        /// Everything scene rules read: the text plus the scene's cast and viewpoint tags
+        /// (presence rules compare the text against the tags).
+        /// </summary>
+        private static string SceneHash(Scene scene) =>
+            NlpCacheService.ComputeHash(string.Join("",
+                scene.Content ?? string.Empty,
+                string.Join(",", scene.CharacterIds ?? []),
+                string.Join(",", scene.ViewpointCharacterIds ?? [])));
 
         private static bool HasEmotionData(SceneAnalysisResult r) =>
             r.Sentences.Any(s => s.Emotions.Any(e => e.Confidence > 0));
@@ -402,7 +417,7 @@ namespace alphaWriter.Services.Nlp
                 Style = styleProfile,
                 Pacing = pacingMetrics,
                 ViewpointCharacterIds = scene.ViewpointCharacterIds?.ToList() ?? [],
-                ContentHash = NlpCacheService.ComputeHash(scene.Content ?? string.Empty),
+                ContentHash = SceneHash(scene),
                 EngineVersion = RuleCatalog.EngineVersion,
                 HadPos = document.HasPos,
                 Sentences = document.Sentences.Select(s => new SentenceAnalysis
@@ -424,10 +439,17 @@ namespace alphaWriter.Services.Nlp
                 Book = book,
                 StyleSheet = book?.StyleSheet ?? new EditorialStyleSheet(),
                 ViewpointCharacterIds = result.ViewpointCharacterIds,
+                TaggedCharacterIds = scene.CharacterIds?.ToList() ?? [],
                 Style = styleProfile,
-                Pacing = pacingMetrics
+                Pacing = pacingMetrics,
+                Senses = SensoryLexicon.Default
             };
             result.Notes.AddRange(Engine.EvaluateScene(ctx));
+            if (SensoryLexicon.Default is { } senses)
+                result.Senses = SensoryAnalyzer.Profile(document, senses);
+            var beats = BeatClassifier.Classify(document);
+            result.ParagraphBeats = beats.Select(b => b.ToString()).ToList();
+            result.Tension = TensionAnalyzer.Signals(document, beats);
 
             foreach (var note in result.Notes)
             {

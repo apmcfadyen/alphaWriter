@@ -106,6 +106,9 @@ namespace alphaWriter.Models
         /// <summary>Editorial preferences: enabled rules, genre, allowed words, dismissed notes.</summary>
         public EditorialStyleSheet StyleSheet { get; set; } = new();
 
+        /// <summary>Note counts from past whole-book analyses, oldest first (capped).</summary>
+        public List<AnalysisSnapshot> AnalysisHistory { get; set; } = new();
+
         public int WordCount => Chapters.Sum(c => c.WordCount);
 
         public bool HasWordTarget => WordTarget > 0;

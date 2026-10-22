@@ -33,7 +33,7 @@ namespace alphaWriter.ViewModels
         [NotifyPropertyChangedFor(nameof(RuleSettingsToggleText))]
         private bool isRuleSettingsVisible;
 
-        public bool IsNotesListVisible => !IsRuleSettingsVisible;
+        public bool IsNotesListVisible => !IsRuleSettingsVisible && !IsPassPickerVisible;
 
         public string RuleSettingsToggleText => IsRuleSettingsVisible ? "← Back to notes" : "⚙ Settings";
 
@@ -82,6 +82,8 @@ namespace alphaWriter.ViewModels
         internal void RebuildReviseGroups()
         {
             var notes = NlpNotes.AsEnumerable();
+            if (IsPassActive)
+                notes = VisibleNotes.Where(n => n.RuleId == ActivePassRuleId);
             bool sceneOnly = ReviseScopeIsScene && SelectedScene is not null;
             if (sceneOnly)
                 notes = notes.Where(n => n.SceneId == SelectedScene!.Id);
@@ -102,6 +104,8 @@ namespace alphaWriter.ViewModels
 
             ReviseNoteGroups = new ObservableCollection<NoteGroup>(groups);
             OnPropertyChanged(nameof(ReviseSummary));
+            UpdatePassProgress();
+            RefreshSceneCard();
 
             static IEnumerable<NlpNote> Order(IEnumerable<NlpNote> ns) => ns
                 .OrderBy(n => n.SentenceIndex ?? -1)
@@ -206,6 +210,7 @@ namespace alphaWriter.ViewModels
         {
             if (!IsRuleSettingsVisible) RefreshEditorialSettings();
             IsRuleSettingsVisible = !IsRuleSettingsVisible;
+            if (IsRuleSettingsVisible) IsPassPickerVisible = false;
         }
 
         [RelayCommand]
@@ -232,8 +237,14 @@ namespace alphaWriter.ViewModels
         /// Actions: dismiss, disable-scene, disable-rule, allow-word.
         /// </summary>
         public void ApplyNoteAction(string action, string? fingerprint, string? ruleId,
-            string? sceneId, string? word)
+            string? sceneId, string? word, string? value = null)
         {
+            if (action == "fix" && !string.IsNullOrEmpty(value))
+            {
+                ApplyFixAction(value, sceneId);
+                return;
+            }
+
             var sheet = StyleSheet;
             if (sheet is null) return;
 
@@ -258,6 +269,45 @@ namespace alphaWriter.ViewModels
 
             OnEditorialPreferencesChanged();
             if (IsRuleSettingsVisible) RefreshEditorialSettings();
+        }
+
+        /// <summary>Runs a note's <see cref="NlpNote.FixAction"/> from a note card.</summary>
+        [RelayCommand]
+        private void ApplyNoteFix(NlpNote? note)
+        {
+            if (note is null || !note.HasFixAction) return;
+            ApplyFixAction(note.FixAction, note.SceneId);
+        }
+
+        /// <summary>
+        /// Non-text fixes: "tag-character:&lt;id&gt;" / "untag-character:&lt;id&gt;" add or
+        /// remove a character from the scene's cast. The scene is re-checked right away,
+        /// so the note disappears once it no longer applies.
+        /// </summary>
+        internal void ApplyFixAction(string fixAction, string? sceneId)
+        {
+            var parts = fixAction.Split(':', 2);
+            if (parts.Length != 2 || SelectedBook is null || string.IsNullOrEmpty(sceneId)) return;
+            var scene = SelectedBook.Chapters.SelectMany(c => c.Scenes).FirstOrDefault(s => s.Id == sceneId);
+            if (scene is null) return;
+
+            switch (parts[0])
+            {
+                case "tag-character" when !scene.CharacterIds.Contains(parts[1]):
+                    scene.CharacterIds.Add(parts[1]);
+                    scene.UntaggedIds.Remove(parts[1]);
+                    break;
+                case "untag-character":
+                    scene.CharacterIds.Remove(parts[1]);
+                    if (!scene.UntaggedIds.Contains(parts[1])) scene.UntaggedIds.Add(parts[1]);   // stays untagged
+                    break;
+                default:
+                    return;
+            }
+
+            if (SelectedScene == scene) RebuildSceneEntityOptions();
+            DebouncedSave();
+            ScheduleLiveAnalysis(scene, 0);
         }
 
         private void OnEditorialPreferencesChanged()
@@ -332,7 +382,14 @@ namespace alphaWriter.ViewModels
 
             var result = _analysisResults?.FirstOrDefault(r => r.SceneId == sceneId);
             if (result is not null)
+            {
                 result.Notes = _allNotes.Where(n => n.SceneId == sceneId).ToList();
+                // Keep the scene's report card current while the author edits
+                result.Style = live.Result.Style;
+                result.ParagraphBeats = live.Result.ParagraphBeats;
+                result.Senses = live.Result.Senses;
+                result.Tension = live.Result.Tension;
+            }
 
             ApplyNoteFilters();
             PopulateSceneNoteCounts(_allNotes);
@@ -350,8 +407,10 @@ namespace alphaWriter.ViewModels
         {
             if (string.IsNullOrEmpty(sceneId)) return "null";
 
+            // During a pass, only that rule's marks: one kind of problem at a time
             var notes = VisibleNotes
                 .Where(n => n.SceneId == sceneId && !string.IsNullOrEmpty(n.AnchorText))
+                .Where(n => !IsPassActive || n.RuleId == ActivePassRuleId)
                 .ToList();
 
             var noteDtos = new List<object>();
@@ -377,6 +436,8 @@ namespace alphaWriter.ViewModels
                     evidence = n.Evidence,
                     fingerprint = n.Fingerprint,
                     suggestions = n.Suggestions,
+                    fixAction = n.FixAction,
+                    fixActionLabel = n.FixActionLabel,
                     canAllowWord = !string.IsNullOrEmpty(n.Evidence) && !n.Evidence.Contains(' ')
                 });
 

@@ -14,7 +14,7 @@ namespace alphaWriter.Services.Nlp.Rules
         /// Bump when scene-rule output changes, so cached per-scene results are recomputed
         /// instead of reused.
         /// </summary>
-        public const int EngineVersion = 3;
+        public const int EngineVersion = 5;
 
         private const NlpNoteCategory Copy = NlpNoteCategory.CopyEditor;
         private const NlpNoteCategory Line = NlpNoteCategory.LineEditor;
@@ -163,6 +163,73 @@ namespace alphaWriter.Services.Nlp.Rules
             "Words you use far more often than typical fiction (compared with 84 public-domain novels).",
             Line, RuleTier.Book, RuleScope.Book);
 
+        // ── Developmental (Phase 2) ─────────────────────────────────────────
+
+        public static readonly RuleDescriptor InfoDump = new(
+            "structure.info-dump", "Info dumps",
+            "Several paragraphs of backstory or explanation in a row, stopping the scene’s present action.",
+            Dev, RuleTier.Lexical, RuleScope.Scene);
+
+        public static readonly RuleDescriptor SceneGrounding = new(
+            "structure.scene-grounding", "Ungrounded openings",
+            "Scenes whose first 150 words don’t say where we are (and often when, or whose eyes we’re in).",
+            Dev, RuleTier.Lexical, RuleScope.Scene);
+
+        public static readonly RuleDescriptor CharacterPresence = new(
+            "structure.character-presence", "Cast tags vs text",
+            "Characters tagged in a scene who are only talked about, or never named at all. One-click untag that stays untagged.",
+            Dev, RuleTier.Lexical, RuleScope.Scene);
+
+        public static readonly RuleDescriptor CharacterAbsence = new(
+            "structure.character-absence", "Disappearing characters",
+            "Recurring characters who vanish for a long run of chapters.",
+            Dev, RuleTier.Book, RuleScope.Book);
+
+        public static readonly RuleDescriptor AttributeContinuity = new(
+            "continuity.attributes", "Contradictory details",
+            "A character’s eye, hair or beard colour described differently in different places. One-click fix.",
+            Dev, RuleTier.Book, RuleScope.Book);
+
+        public static readonly RuleDescriptor SetupPayoff = new(
+            "structure.setup-payoff", "Setup and payoff",
+            "Story Bible items introduced and never mentioned again, or first appearing only near the end.",
+            Dev, RuleTier.Book, RuleScope.Book);
+
+        public static readonly RuleDescriptor RepeatedPhrases = new(
+            "style.repeated-phrases", "Repeated descriptions",
+            "Distinctive six-word phrases reused in different chapters.",
+            Line, RuleTier.Book, RuleScope.Book);
+
+        public static readonly RuleDescriptor ChapterTimeCues = new(
+            "structure.time-cues", "Time cues at chapter breaks",
+            "Chapters that open with no sense of how much time has passed.",
+            Dev, RuleTier.Book, RuleScope.Book);
+
+        public static readonly RuleDescriptor ChapterEndings = new(
+            "structure.chapter-endings", "Chapter endings",
+            "Chapters that end on a settled, quiet beat, especially several in a row in the middle of the book.",
+            Dev, RuleTier.Book, RuleScope.Book);
+
+        public static readonly RuleDescriptor SensoryBalance = new(
+            "style.sensory-balance", "Sensory balance",
+            "Scenes told almost entirely through sight, with no sound, touch, smell or taste.",
+            Line, RuleTier.Lexical, RuleScope.Scene);
+
+        public static readonly RuleDescriptor AbstractPassages = new(
+            "style.abstract-passages", "Abstract passages",
+            "Narration paragraphs made of abstract words, with little to see, hear or touch.",
+            Line, RuleTier.Lexical, RuleScope.Scene);
+
+        public static readonly RuleDescriptor TensionSag = new(
+            "structure.tension-sag", "Sagging middle",
+            "A long run of the book’s quietest scenes in the middle, with little danger, conflict or urgency.",
+            Dev, RuleTier.Book, RuleScope.Book);
+
+        public static readonly RuleDescriptor ClimaxPlacement = new(
+            "structure.climax", "Climax placement",
+            "The book’s most intense stretch coming early, or an ending quieter than the middle.",
+            Dev, RuleTier.Book, RuleScope.Book);
+
         // ── Chapter comparisons ─────────────────────────────────────────────
 
         public static readonly RuleDescriptor SentenceLengthDrift = new(
@@ -269,6 +336,9 @@ namespace alphaWriter.Services.Nlp.Rules
             PovSlip, FilterWords, DialogueTagPunctuation, DialogueTagVerbs, DialogueAdverbTags, TalkingHeads,
             Redundancy, Cliche, CrutchWords, NameSpelling, SimilarNames,
             AmbiguousPronoun, TenseDrift, GestureTics, ConsistencySheet, SignatureWords,
+            InfoDump, SceneGrounding, CharacterPresence, CharacterAbsence, AttributeContinuity,
+            SetupPayoff, RepeatedPhrases, ChapterTimeCues, ChapterEndings,
+            SensoryBalance, AbstractPassages, TensionSag, ClimaxPlacement,
             SentenceLengthDrift, VocabularyDrift, ReadabilityDrift, SceneOutlier, TopicDrift, ToneShift,
             SceneCount, ChapterLength, DialogueBalance, ContractionShift, SceneOpening, SceneClosing,
             FormalityDrift, VocabularyPlateau, ActPacing, EmotionalFlatline, DialogueDesert,

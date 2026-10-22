@@ -284,6 +284,12 @@ namespace alphaWriter.ViewModels
             ActiveWorkspace = Workspace.Write;
             InsightsShowsReport = false;
             AttachOutline(value);
+            EndPass();
+            IsPassPickerVisible = false;
+            _currentNote = null;
+            _currentPosition = (-1, -1);
+            OnPropertyChanged(nameof(ProgressSummary));
+            OnPropertyChanged(nameof(HasProgressSummary));
             OnPropertyChanged(nameof(HasSelectedBook));
             OnPropertyChanged(nameof(CurrentBookTitle));
 
@@ -836,16 +842,19 @@ namespace alphaWriter.ViewModels
 
             foreach (var c in SelectedBook.Characters)
                 if (IsEntityDetectedInContent(content, c.Name, c.Aka)
+                    && !SelectedScene.UntaggedIds.Contains(c.Id)
                     && !SelectedScene.CharacterIds.Contains(c.Id))
                     SelectedScene.CharacterIds.Add(c.Id);
 
             foreach (var l in SelectedBook.Locations)
                 if (IsEntityDetectedInContent(content, l.Name, l.Aka)
+                    && !SelectedScene.UntaggedIds.Contains(l.Id)
                     && !SelectedScene.LocationIds.Contains(l.Id))
                     SelectedScene.LocationIds.Add(l.Id);
 
             foreach (var i in SelectedBook.Items)
                 if (IsEntityDetectedInContent(content, i.Name, i.Aka)
+                    && !SelectedScene.UntaggedIds.Contains(i.Id)
                     && !SelectedScene.ItemIds.Contains(i.Id))
                     SelectedScene.ItemIds.Add(i.Id);
         }
@@ -882,6 +891,12 @@ namespace alphaWriter.ViewModels
         {
             if (_suppressEntitySync
                 || e.PropertyName != nameof(SceneEntityOption.IsSelected)) return;
+            // Unticking is remembered so auto-detection doesn't re-add the entity
+            if (sender is SceneEntityOption option && SelectedScene is not null)
+            {
+                SelectedScene.UntaggedIds.Remove(option.Id);
+                if (!option.IsSelected) SelectedScene.UntaggedIds.Add(option.Id);
+            }
             SyncSceneEntitiesToScene();
             TriggerSaveAsync().ConfigureAwait(false);
         }
@@ -973,6 +988,8 @@ namespace alphaWriter.ViewModels
                 SelectedCategoryFilter = "All";
                 SelectedSeverityFilter = "All";
                 ApplyNoteFilters();
+                RecordAnalysisSnapshot();
+                if (IsPassPickerVisible) RebuildPassOptions();
                 AnalysisProgress = $"{AnalysisProgress} Found {NlpNotes.Count} note{(NlpNotes.Count == 1 ? "" : "s")}.";
                 AnnotationsChanged?.Invoke();
                 OnPropertyChanged(nameof(HasAnalysisResults));
@@ -1005,6 +1022,7 @@ namespace alphaWriter.ViewModels
         {
             _allNotes = [];
             _analysisResults = null;
+            SceneCard = null;
             _voiceProfiles = [];
             _dialogueProfiles = [];
             NlpNotes = [];
@@ -1410,6 +1428,7 @@ namespace alphaWriter.ViewModels
         private void NavigateToNote(NlpNote note)
         {
             if (SelectedBook is null || string.IsNullOrEmpty(note.SceneId)) return;
+            TrackCurrentNote(note);
 
             foreach (var chapter in SelectedBook.Chapters)
             {
@@ -1468,7 +1487,20 @@ namespace alphaWriter.ViewModels
                 dialogueRatio = Math.Round(r.Style.DialogueRatio, 3),
                 chapterSimilarity = Math.Round(r.ChapterSimilarity, 3),
                 noteCount = r.Notes.Count,
-                emotions = AggregateSceneEmotions(r)
+                emotions = AggregateSceneEmotions(r),
+                senses = r.Senses.Counts,
+                concreteness = r.Senses.Concreteness
+            }).ToList();
+
+            // Tension and mood across the book (scenes with real prose only)
+            var arc = Services.Nlp.Rules.TensionArc.Compute(_analysisResults).Select(p => new
+            {
+                title = p.Scene.SceneTitle,
+                chapter = p.Scene.ChapterTitle,
+                sceneId = p.Scene.SceneId,
+                tension = p.Tension,
+                smoothed = p.Smoothed,
+                mood = p.Mood
             }).ToList();
 
             var notes = NlpNotes.Select(n => new
@@ -1548,7 +1580,19 @@ namespace alphaWriter.ViewModels
             }).ToList();
 
             return System.Text.Json.JsonSerializer.Serialize(
-                new { scenes, notes, characterProfiles, dialogueProfiles },
+                new
+                {
+                    scenes, notes, characterProfiles, dialogueProfiles, arc,
+                    genre = SelectedBook?.StyleSheet?.Genre ?? EditorialStyleSheet.DefaultGenre,
+                    benchmarks = BenchmarkRows.Select(r => new
+                    {
+                        label = r.Benchmark.Label,
+                        advice = r.Benchmark.Advice,
+                        value = r.ValueText,
+                        range = r.RangeText,
+                        verdict = r.Verdict.ToString().ToLowerInvariant()
+                    })
+                },
                 new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase });
         }
 
@@ -1603,16 +1647,19 @@ namespace alphaWriter.ViewModels
             {
                 foreach (var c in SelectedBook.Characters)
                     if (IsEntityDetectedInContent(scene.Content, c.Name, c.Aka)
+                        && !scene.UntaggedIds.Contains(c.Id)
                         && !scene.CharacterIds.Contains(c.Id))
                         scene.CharacterIds.Add(c.Id);
 
                 foreach (var l in SelectedBook.Locations)
                     if (IsEntityDetectedInContent(scene.Content, l.Name, l.Aka)
+                        && !scene.UntaggedIds.Contains(l.Id)
                         && !scene.LocationIds.Contains(l.Id))
                         scene.LocationIds.Add(l.Id);
 
                 foreach (var i in SelectedBook.Items)
                     if (IsEntityDetectedInContent(scene.Content, i.Name, i.Aka)
+                        && !scene.UntaggedIds.Contains(i.Id)
                         && !scene.ItemIds.Contains(i.Id))
                         scene.ItemIds.Add(i.Id);
             }

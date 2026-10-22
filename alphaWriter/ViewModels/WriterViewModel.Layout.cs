@@ -88,7 +88,7 @@ namespace alphaWriter.ViewModels
         // ── Keyboard shortcuts ────────────────────────────────────────────────
 
         /// <summary>
-        /// Ctrl+1…5 switch workspaces; Ctrl+\ shows or hides the sidebar. Called from the
+        /// Ctrl+1…5 switch workspaces; Ctrl+\ shows or hides the sidebar; F8 / Shift+F8 step through notes. Called from the
         /// window's keyboard accelerators and, while the editor has focus, from editor.html.
         /// </summary>
         public bool HandleShortcut(string key)
@@ -101,6 +101,8 @@ namespace alphaWriter.ViewModels
                 case "4": ActiveWorkspace = Workspace.Insights; return true;
                 case "5": if (SelectedBook is not null) ActiveWorkspace = Workspace.Book; return true;
                 case "sidebar": IsSidebarVisible = !IsSidebarVisible; return true;
+                case "next": StepNote(+1); return true;
+                case "prev": StepNote(-1); return true;
                 default: return false;
             }
         }

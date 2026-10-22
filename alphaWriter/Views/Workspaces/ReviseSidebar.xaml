@@ -9,6 +9,7 @@
              xmlns:vm="clr-namespace:alphaWriter.ViewModels"
              xmlns:analysis="clr-namespace:alphaWriter.Models.Analysis"
              xmlns:converters="clr-namespace:alphaWriter.Converters"
+             xmlns:nlp="clr-namespace:alphaWriter.Services.Nlp"
              x:Class="alphaWriter.Views.Workspaces.ReviseSidebar">
 
     <ContentView.Resources>
@@ -62,7 +63,7 @@
                    TextColor="{StaticResource TextSecondary}" FontSize="11" FontAttributes="Italic"
                    LineBreakMode="WordWrap"
                    IsVisible="{Binding AnalysisProgress, Converter={StaticResource IsNotNullOrEmptyConverter}}" />
-            <HorizontalStackLayout Spacing="2">
+            <FlexLayout Wrap="Wrap">
                 <Button Text="Download models" Style="{StaticResource SmallLink}"
                         Command="{Binding DownloadModelsCommand}"
                         ToolTipProperties.Text="Optional (~330 MB): adds emotion, tone-shift and topic analysis. Runs entirely on this computer." />
@@ -70,14 +71,18 @@
                         Command="{Binding ShowNlpReportCommand}"
                         IsVisible="{Binding HasAnalysisResults}"
                         ToolTipProperties.Text="Pacing, style, emotion and voice charts (Insights)" />
+                <Button Text="Export summary" Style="{StaticResource SmallLink}"
+                        Command="{Binding ExportSummaryCommand}"
+                        IsVisible="{Binding HasAnalysisResults}"
+                        ToolTipProperties.Text="Save an editorial summary of the whole book as a web page you can print or share" />
                 <Button Text="Clear" Style="{StaticResource SmallLink}"
                         Command="{Binding ClearAnalysisCommand}"
                         IsVisible="{Binding HasAnalysisResults}"
                         ToolTipProperties.Text="Clear the analysis results" />
-            </HorizontalStackLayout>
+            </FlexLayout>
 
             <!-- Scope + filters -->
-            <Grid ColumnDefinitions="*,*" ColumnSpacing="4">
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="4" IsVisible="{Binding IsBrowsingNotes}">
                 <Button Grid.Column="0" Text="This scene"
                         Style="{StaticResource SidebarTabButton}"
                         BackgroundColor="{Binding ReviseScopeIsScene, Converter={StaticResource SelectedTabConverter}}"
@@ -91,7 +96,7 @@
                         Command="{Binding SetReviseScopeCommand}" CommandParameter="book"
                         ToolTipProperties.Text="Notes for every scene, grouped by chapter" />
             </Grid>
-            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="6">
+            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="6" IsVisible="{Binding IsBrowsingNotes}">
                 <Label Grid.Row="0" Text="Editor" Style="{StaticResource FieldCaption}" />
                 <Picker Grid.Row="0" Grid.Column="1"
                         ItemsSource="{Binding CategoryFilterOptions}"
@@ -103,7 +108,60 @@
                         SelectedItem="{Binding SelectedSeverityFilter}"
                         TextColor="{StaticResource TextPrimary}" FontSize="12" />
             </Grid>
-            <Label Text="{Binding ReviseSummary}" TextColor="{StaticResource TextSecondary}" FontSize="11" />
+            <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding IsBrowsingNotes}">
+                <VerticalStackLayout VerticalOptions="Center">
+                    <Label Text="{Binding ReviseSummary}" TextColor="{StaticResource TextSecondary}" FontSize="11" />
+                    <Label Text="{Binding ProgressSummary}" TextColor="{StaticResource TextAccent}" FontSize="11"
+                           IsVisible="{Binding HasProgressSummary}"
+                           ToolTipProperties.Text="Visible notes compared with the previous analysis" />
+                </VerticalStackLayout>
+                <Button Grid.Column="1" Text="Revision passes ›" Style="{StaticResource SmallLink}"
+                        Command="{Binding TogglePassPickerCommand}"
+                        IsVisible="{Binding HasAnalysisResults}"
+                        ToolTipProperties.Text="Work through one kind of note across the whole book. F8 / Shift+F8 step through notes." />
+            </Grid>
+
+            <!-- Active pass: one rule, one note at a time -->
+            <Border IsVisible="{Binding IsPassActive}"
+                    StrokeShape="RoundRectangle 6"
+                    Stroke="{StaticResource AccentPrimary}"
+                    BackgroundColor="{StaticResource SurfaceRaised}"
+                    Padding="10,8">
+                <VerticalStackLayout Spacing="6">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <VerticalStackLayout>
+                            <Label Text="REVISION PASS" TextColor="{StaticResource TextSecondary}" FontSize="10" FontAttributes="Bold" />
+                            <Label Text="{Binding ActivePassTitle}" TextColor="{StaticResource TextPrimary}"
+                                   FontSize="14" FontAttributes="Bold" LineBreakMode="TailTruncation"
+                                   ToolTipProperties.Text="{Binding ActivePassDescription}" />
+                        </VerticalStackLayout>
+                        <Button Grid.Column="1" Text="End pass" Style="{StaticResource SmallLink}"
+                                VerticalOptions="Start"
+                                Command="{Binding EndPassCommand}" />
+                    </Grid>
+                    <Label Text="{Binding ActivePassDescription}" TextColor="{StaticResource TextSecondary}"
+                           FontSize="11" LineBreakMode="WordWrap" />
+                    <Label Text="{Binding PassProgressText}" TextColor="{StaticResource TextAccent}" FontSize="12" FontAttributes="Bold" />
+                    <Label Text="{Binding CurrentPassNote.Message}" IsVisible="{Binding HasCurrentPassNote}"
+                           TextColor="{StaticResource TextPrimary}" FontSize="12" LineBreakMode="WordWrap" />
+                    <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="4">
+                        <Button Grid.Column="0" Text="‹ Prev" Style="{StaticResource SidebarTabButton}"
+                                Command="{Binding PreviousNoteCommand}" ToolTipProperties.Text="Previous note (Shift+F8)" />
+                        <Button Grid.Column="1" Text="Next ›" Style="{StaticResource SidebarTabButton}"
+                                Command="{Binding NextNoteCommand}" ToolTipProperties.Text="Next note (F8)" />
+                        <Button Grid.Column="3" Text="Ignore" Style="{StaticResource SmallLink}"
+                                IsVisible="{Binding HasCurrentPassNote}"
+                                Command="{Binding IgnorePassNoteCommand}"
+                                ToolTipProperties.Text="Hide this note and go to the next one" />
+                    </Grid>
+                    <Button Text="{Binding CurrentPassNote.FixActionLabel}"
+                            IsVisible="{Binding CurrentPassNote.HasFixAction, FallbackValue=False}"
+                            Style="{StaticResource SidebarTabButton}"
+                            HorizontalOptions="Start"
+                            Command="{Binding FixPassNoteCommand}"
+                            ToolTipProperties.Text="Apply the fix and go to the next note" />
+                </VerticalStackLayout>
+            </Border>
         </VerticalStackLayout>
 
         <!-- Notes, grouped by scene in reading order -->
@@ -113,6 +171,53 @@
                         IsVisible="{Binding IsNotesListVisible}"
                         SelectionMode="None"
                         Margin="6,0,6,6">
+            <CollectionView.Header>
+                <!-- The open scene at a glance -->
+                <Border IsVisible="{Binding IsSceneCardVisible}"
+                        StrokeShape="RoundRectangle 6"
+                        Stroke="{StaticResource SurfaceRaised}"
+                        BackgroundColor="{StaticResource SurfaceMid}"
+                        Padding="10,8" Margin="0,4,0,4">
+                    <VerticalStackLayout Spacing="5">
+                        <Label Text="SCENE AT A GLANCE" TextColor="{StaticResource TextSecondary}" FontSize="10" FontAttributes="Bold" />
+                        <Label Text="{Binding SceneCard.Stats}" TextColor="{StaticResource TextPrimary}" FontSize="11" LineBreakMode="WordWrap" />
+
+                        <Label Text="Shape" TextColor="{StaticResource TextSecondary}" FontSize="10" Margin="0,2,0,0"
+                               IsVisible="{Binding SceneCard.HasBeats, FallbackValue=False}" />
+                        <FlexLayout BindableLayout.ItemsSource="{Binding SceneCard.Beats}" HeightRequest="10"
+                                    IsVisible="{Binding SceneCard.HasBeats, FallbackValue=False}">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="nlp:StripSegment">
+                                    <BoxView Color="{Binding Color}" FlexLayout.Grow="{Binding Grow}" FlexLayout.Basis="0"
+                                             Margin="0,0,1,0" ToolTipProperties.Text="{Binding Tip}" />
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </FlexLayout>
+                        <Label Text="{Binding SceneCard.BeatSummary}" TextColor="{StaticResource TextSecondary}" FontSize="10"
+                               LineBreakMode="WordWrap" IsVisible="{Binding SceneCard.HasBeats, FallbackValue=False}"
+                               ToolTipProperties.Text="Paragraphs by what they mostly do: dialogue (blue), action (red), interiority (purple), description (green), exposition (orange)" />
+
+                        <Label Text="Senses" TextColor="{StaticResource TextSecondary}" FontSize="10" Margin="0,2,0,0"
+                               IsVisible="{Binding SceneCard.HasSenses, FallbackValue=False}" />
+                        <FlexLayout BindableLayout.ItemsSource="{Binding SceneCard.Senses}" HeightRequest="10"
+                                    IsVisible="{Binding SceneCard.HasSenses, FallbackValue=False}">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="nlp:StripSegment">
+                                    <BoxView Color="{Binding Color}" FlexLayout.Grow="{Binding Grow}" FlexLayout.Basis="0"
+                                             Margin="0,0,1,0" ToolTipProperties.Text="{Binding Tip}" />
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </FlexLayout>
+                        <Label Text="{Binding SceneCard.SenseSummary}" TextColor="{StaticResource TextSecondary}" FontSize="10"
+                               LineBreakMode="WordWrap" IsVisible="{Binding SceneCard.HasSenses, FallbackValue=False}"
+                               ToolTipProperties.Text="Sound (yellow), taste (purple), touch (orange), body (red), smell (green), sight (blue)" />
+
+                        <Label Text="{Binding SceneCard.TensionSummary}" TextColor="{StaticResource TextPrimary}" FontSize="11"
+                               LineBreakMode="WordWrap" IsVisible="{Binding SceneCard.HasTension, FallbackValue=False}" Margin="0,2,0,0" />
+                        <Label Text="{Binding SceneCard.NoteSummary}" TextColor="{StaticResource TextAccent}" FontSize="11" />
+                    </VerticalStackLayout>
+                </Border>
+            </CollectionView.Header>
             <CollectionView.GroupHeaderTemplate>
                 <DataTemplate x:DataType="vm:NoteGroup">
                     <Label Text="{Binding Header}"
@@ -136,7 +241,7 @@
                                 Command="{Binding Source={RelativeSource AncestorType={x:Type vm:WriterViewModel}}, Path=NavigateToNoteCommand}"
                                 CommandParameter="{Binding .}" />
                         </Border.GestureRecognizers>
-                        <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" RowSpacing="2">
+                        <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" RowSpacing="2">
                             <BoxView Grid.Row="0" Grid.Column="0"
                                      WidthRequest="8" HeightRequest="8" CornerRadius="4"
                                      Color="{Binding CategoryColor}" VerticalOptions="Center"
@@ -160,6 +265,15 @@
                                    TextColor="{StaticResource TextPrimary}"
                                    FontSize="12"
                                    LineBreakMode="WordWrap" />
+                            <Button Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3"
+                                    Text="{Binding FixActionLabel}"
+                                    IsVisible="{Binding HasFixAction}"
+                                    Style="{StaticResource SidebarTabButton}"
+                                    FontSize="11"
+                                    HorizontalOptions="Start"
+                                    Margin="0,4,0,0"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:WriterViewModel}}, Path=ApplyNoteFixCommand}"
+                                    CommandParameter="{Binding .}" />
                         </Grid>
                     </Border>
                 </DataTemplate>
@@ -172,6 +286,52 @@
                        Margin="8,12" />
             </CollectionView.EmptyView>
         </CollectionView>
+
+        <!-- Pass picker (replaces the list while open) -->
+        <Grid Grid.Row="1" Grid.RowSpan="2" RowDefinitions="Auto,*" IsVisible="{Binding IsPassPickerVisible}">
+            <VerticalStackLayout Padding="12,4,12,6" Spacing="4">
+                <Grid ColumnDefinitions="*,Auto">
+                    <Label Text="Revision passes" TextColor="{StaticResource TextPrimary}" FontSize="13" FontAttributes="Bold" VerticalOptions="Center" />
+                    <Button Grid.Column="1" Text="← Back to notes" Style="{StaticResource SmallLink}"
+                            Command="{Binding TogglePassPickerCommand}" />
+                </Grid>
+                <Label Text="Pick one kind of note and work through every instance in the book, one at a time. Only that note's marks show in the editor. F8 / Shift+F8 move between notes."
+                       TextColor="{StaticResource TextSecondary}" FontSize="11" LineBreakMode="WordWrap" />
+            </VerticalStackLayout>
+            <CollectionView Grid.Row="1" ItemsSource="{Binding PassOptions}" SelectionMode="None" Margin="6,0,6,6">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="vm:PassOption">
+                        <Border StrokeShape="RoundRectangle 4"
+                                Stroke="{StaticResource SurfaceRaised}"
+                                BackgroundColor="{StaticResource SurfaceRaised}"
+                                Padding="8,6" Margin="0,2">
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:WriterViewModel}}, Path=StartPassCommand}"
+                                    CommandParameter="{Binding .}" />
+                            </Border.GestureRecognizers>
+                            <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" RowSpacing="2">
+                                <BoxView WidthRequest="8" HeightRequest="8" CornerRadius="4"
+                                         Color="{Binding CategoryColor}" VerticalOptions="Center" />
+                                <Label Grid.Column="1" Text="{Binding Title}" TextColor="{StaticResource TextPrimary}"
+                                       FontSize="12" FontAttributes="Bold" LineBreakMode="TailTruncation" />
+                                <HorizontalStackLayout Grid.Column="2" Spacing="6">
+                                    <Label Text="{Binding Trend}" IsVisible="{Binding HasTrend}"
+                                           TextColor="{StaticResource TextSecondary}" FontSize="11" FontAttributes="Italic" />
+                                    <Label Text="{Binding CountText}" TextColor="{StaticResource TextAccent}" FontSize="11" />
+                                </HorizontalStackLayout>
+                                <Label Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding Description}"
+                                       TextColor="{StaticResource TextSecondary}" FontSize="11" LineBreakMode="WordWrap" />
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+                <CollectionView.EmptyView>
+                    <Label Text="No notes to work through. Run an analysis first."
+                           TextColor="{StaticResource TextSecondary}" FontSize="12" FontAttributes="Italic" Margin="8,12" />
+                </CollectionView.EmptyView>
+            </CollectionView>
+        </Grid>
 
         <!-- Editorial settings (replaces the list while open) -->
         <ScrollView Grid.Row="1" Grid.RowSpan="2" IsVisible="{Binding IsRuleSettingsVisible}">
