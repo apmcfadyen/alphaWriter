@@ -37,6 +37,9 @@ FOG = paragraphs(
     "agreed with any of it, or whether she had plans of her own.",
     "“Then walk with me,” she said. “Erik will want to hear about the key.” // check Tomas's voice here",
     "The door was opened by someone inside. Light spilled across the wet stones of the quay.",
+    # Names missing from the Story Bible, for the entity scan (one long, to test truncation)
+    "Captain Levinson watched from the boathouse, and Klio waved to him. Levinson did not wave back. "
+    "Behind them, Bartholomew Featherstonehaugh counted the crates again.",
 )
 
 STATION = paragraphs(

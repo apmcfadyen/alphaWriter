@@ -28,6 +28,7 @@ param(
         "write-empty"    = "book=first;workspace=Write"
         "write-quotes"   = "book=first;scene=Straight Quotes in the Ledger;workspace=Write"
         "storybible"     = "book=first;character=Eleonora;workspace=StoryBible"
+        "storybible-scan"= "book=first;scan=on;workspace=StoryBible"
         "revise"         = "book=first;scene=The Fog Rolls In;scope=scene;workspace=Revise"
         "revise-settings"= "book=first;settings=on;workspace=Revise"
         "revise-station" = "book=first;scene=The Station at a Quarter Past Four;scope=scene;workspace=Revise"

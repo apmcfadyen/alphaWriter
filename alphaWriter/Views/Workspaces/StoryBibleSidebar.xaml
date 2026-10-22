@@ -69,11 +69,10 @@
                                     MaximumHeightRequest="180">
                         <CollectionView.ItemTemplate>
                             <DataTemplate x:DataType="vm:NerCandidateViewModel">
-                                <Grid ColumnDefinitions="Auto,*,Auto" Padding="0,1">
+                                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6" Padding="0,1">
                                     <CheckBox Grid.Column="0"
                                               IsChecked="{Binding IsSelected}"
-                                              VerticalOptions="Center"
-                                              Margin="0,0,-85,0" />
+                                              VerticalOptions="Center" />
                                     <Label Grid.Column="1"
                                            Text="{Binding Name}"
                                            Style="{StaticResource ListItemLabel}"
@@ -165,11 +164,10 @@
                                     MaximumHeightRequest="180">
                         <CollectionView.ItemTemplate>
                             <DataTemplate x:DataType="vm:NerCandidateViewModel">
-                                <Grid ColumnDefinitions="Auto,*,Auto" Padding="0,1">
+                                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6" Padding="0,1">
                                     <CheckBox Grid.Column="0"
                                               IsChecked="{Binding IsSelected}"
-                                              VerticalOptions="Center"
-                                              Margin="0,0,-85,0" />
+                                              VerticalOptions="Center" />
                                     <Label Grid.Column="1"
                                            Text="{Binding Name}"
                                            Style="{StaticResource ListItemLabel}"
@@ -261,11 +259,10 @@
                                     MaximumHeightRequest="180">
                         <CollectionView.ItemTemplate>
                             <DataTemplate x:DataType="vm:NerCandidateViewModel">
-                                <Grid ColumnDefinitions="Auto,*,Auto" Padding="0,1">
+                                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6" Padding="0,1">
                                     <CheckBox Grid.Column="0"
                                               IsChecked="{Binding IsSelected}"
-                                              VerticalOptions="Center"
-                                              Margin="0,0,-85,0" />
+                                              VerticalOptions="Center" />
                                     <Label Grid.Column="1"
                                            Text="{Binding Name}"
                                            Style="{StaticResource ListItemLabel}"
