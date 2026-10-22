@@ -257,6 +257,9 @@ namespace alphaWriter.ViewModels
 
             _ = Services.Nlp.Rules.ReferenceFrequencies.LoadDefaultAsync(); // for Insights › Signature words
             var loaded = await _bookService.LoadBooksAsync();
+            // Undo backslashes an old editor escaping bug added before quotes
+            if (Services.EditorContentCodec.RepairBooks(loaded))
+                await _bookService.SaveBooksAsync(loaded);
             Books = new ObservableCollection<Book>(loaded);
 
             // Restore last-opened book across sessions
