@@ -149,6 +149,17 @@
     return _rawContent;
   }
 
+  // The content as base64 (UTF-8). C# reads this rather than getContent(): a plain
+  // string comes back JSON-escaped, sometimes without its quotes, and quotes in the
+  // prose then picked up backslashes on every save.
+  function getContentB64() {
+    var bytes = new TextEncoder().encode(_rawContent);
+    var bin = '';
+    for (var i = 0; i < bytes.length; i += 0x8000)
+      bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(bin);
+  }
+
   function computeWordCount(rawHtml) {
     var text = rawHtml;
     // Block-level tags → newline so // comments terminate at line breaks

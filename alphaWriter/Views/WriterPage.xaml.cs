@@ -151,10 +151,9 @@ namespace alphaWriter.Views
                 System.Diagnostics.Debug.WriteLine($"[EDITOR] contentChanged: _currentEditorScene={targetScene?.Title ?? "NULL"}");
                 if (targetScene is null) return;
 
-                var raw = await EditorWebView.EvaluateJavaScriptAsync("getContent()");
-                System.Diagnostics.Debug.WriteLine($"[EDITOR] contentChanged getContent raw={raw?.Substring(0, Math.Min(raw?.Length ?? 0, 100)) ?? "NULL"}");
-                if (raw is null) return; // WebView unavailable — don't wipe content
-                var content = DecodeJsString(raw);
+                var raw = await EditorWebView.EvaluateJavaScriptAsync("getContentB64()");
+                var content = EditorContentCodec.DecodeBase64Result(raw);
+                if (content is null) return; // WebView unavailable — don't wipe content
                 var wcRaw = await EditorWebView.EvaluateJavaScriptAsync("getWordCount()");
                 int? jsWordCount = null;
                 if (int.TryParse(wcRaw, out var wc)) jsWordCount = wc;
@@ -260,12 +259,9 @@ namespace alphaWriter.Views
             try
             {
                 var raw = await EditorWebView.EvaluateJavaScriptAsync(
-                    "(flushContent(), getContent())");
-                System.Diagnostics.Debug.WriteLine($"[EDITOR] FlushEditor: raw result type={raw?.GetType().Name ?? "NULL"}, length={raw?.Length ?? -1}, preview='{raw?.Substring(0, Math.Min(raw?.Length ?? 0, 100))}'");
-                if (raw is not null)
+                    "(flushContent(), getContentB64())");
+                if (EditorContentCodec.DecodeBase64Result(raw) is { } content)
                 {
-                    var content = DecodeJsString(raw);
-                    System.Diagnostics.Debug.WriteLine($"[EDITOR] FlushEditor: decoded content length={content.Length}, preview='{content.Substring(0, Math.Min(content.Length, 100))}'");
                     scene.Content = content;
                 }
                 else
@@ -1439,25 +1435,6 @@ function navigateToNote(sceneId, sentenceIndex) {
                  + "<script>" + appJs
                  + "init(" + dataJson + ");"
                  + "</" + "script></body></html>";
-        }
-
-        // ── JS string decoding ────────────────────────────────────────────────
-        // WebView2 on Windows returns EvaluateJavaScriptAsync results as a JSON
-        // string WITH outer quotes on some MAUI versions, and WITHOUT on others.
-        // When the outer quotes are absent, JSON deserialization fails and the
-        // raw string may still contain \uXXXX escape sequences (e.g. \u003C for
-        // '<'). We decode those sequences so the stored HTML always has real
-        // angle-bracket characters.
-        private static string DecodeJsString(string? raw)
-        {
-            if (raw is null) return string.Empty;
-            try { return System.Text.Json.JsonSerializer.Deserialize<string>(raw) ?? string.Empty; }
-            catch { }
-            // Decode \uXXXX sequences left by WebView2's unquoted JSON encoding.
-            return System.Text.RegularExpressions.Regex.Replace(
-                raw,
-                @"\\u([0-9a-fA-F]{4})",
-                m => ((char)Convert.ToInt32(m.Groups[1].Value, 16)).ToString());
         }
 
         // ── Global drag-glyph suppression (Windows) ──────────────────────────
