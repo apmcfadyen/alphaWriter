@@ -433,7 +433,8 @@ namespace alphaWriter.ViewModels
                 SelectedBook = null;
             Books.Remove(book);
 
-            // Clean up stored images for this book
+            // The book's folder (scenes and pictures) is removed when the library is saved.
+            // Pictures from before per-book folders lived here:
             var imageDir = Path.Combine(AppPaths.DataDirectory, "images", book.Id);
             if (Directory.Exists(imageDir))
             {

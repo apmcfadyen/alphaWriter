@@ -90,6 +90,8 @@ public class ExportTests
     [InlineData(ChapterHeadingStyle.Title, "Arrival", "Arrival")]
     [InlineData(ChapterHeadingStyle.Title, "", "Chapter 1")]
     [InlineData(ChapterHeadingStyle.NumberAndTitle, "Arrival", "Chapter 1: Arrival")]
+    [InlineData(ChapterHeadingStyle.NumberAndTitle, "Chapter 1", "Chapter 1")]
+    [InlineData(ChapterHeadingStyle.Title, "chapter 1", "Chapter 1")]
     public void Heading_FollowsTheStyle(ChapterHeadingStyle style, string title, string expected) =>
         Assert.Equal(expected, ManuscriptBuilder.Heading(1, title, style));
 

@@ -13,7 +13,9 @@ namespace alphaWriter.Services
             if (result is null)
                 return string.Empty;
 
-            var dir = Path.Combine(AppPaths.DataDirectory, "images", bookId);
+            // Pictures live in the book's own folder, so they travel (and sync) with it
+            var relativeDir = Path.Combine(BookService.BooksFolder, bookId, "images");
+            var dir = Path.Combine(AppPaths.DataDirectory, relativeDir);
             Directory.CreateDirectory(dir);
 
             var ext = Path.GetExtension(result.FileName);
@@ -24,7 +26,7 @@ namespace alphaWriter.Services
             using var dest = File.Create(destPath);
             await source.CopyToAsync(dest);
 
-            return Path.Combine("images", bookId, fileName);
+            return Path.Combine(relativeDir, fileName);
         }
 
         public string GetFullImagePath(string relativePath)

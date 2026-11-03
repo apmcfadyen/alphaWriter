@@ -99,6 +99,8 @@ namespace alphaWriter.Services.Export
         internal static string Heading(int number, string title, ChapterHeadingStyle style)
         {
             title = title?.Trim() ?? string.Empty;
+            // A default title like "Chapter 4" says nothing more than the number
+            if (Regex.IsMatch(title, @"^chapter\s+\d+$", RegexOptions.IgnoreCase)) title = string.Empty;
             return style switch
             {
                 ChapterHeadingStyle.Number => $"Chapter {number}",
