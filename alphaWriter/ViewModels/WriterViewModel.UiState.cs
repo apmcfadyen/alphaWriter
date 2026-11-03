@@ -12,7 +12,7 @@ namespace alphaWriter.ViewModels
     /// <c>book=first</c>, <c>scene=&lt;title&gt;</c>, <c>character=&lt;name&gt;</c>,
     /// <c>insight=&lt;Frequency|Problems|Characters|DailyProgress|report:Entities&gt;</c>,
     /// <c>scope=scene|book</c>, <c>inspector=on|off</c>, <c>sidebar=on|off</c>,
-    /// <c>settings=on</c>, <c>analyze=on</c> (runs a whole-book analysis), <c>section=&lt;report element id&gt;</c>, <c>passes=on</c>, <c>scan=on</c> (Story Bible entity scan), <c>exportfile=&lt;format&gt;</c>, <c>export=on</c>, <c>pass=&lt;rule id&gt;</c>, <c>filter=&lt;editor&gt;</c>,
+    /// <c>settings=on</c>, <c>analyze=on</c> (runs a whole-book analysis), <c>section=&lt;report element id&gt;</c>, <c>passes=on</c>, <c>scan=on</c> (Story Bible entity scan), <c>syncfolder=&lt;path&gt;</c>, <c>syncdevice=&lt;name&gt;</c>, <c>syncnow=on</c>, <c>syncsettings=on</c>, <c>exportfile=&lt;format&gt;</c>, <c>export=on</c>, <c>pass=&lt;rule id&gt;</c>, <c>filter=&lt;editor&gt;</c>,
     /// <c>workspace=&lt;Write|StoryBible|Revise|Insights|Book&gt;</c>.
     /// </remarks>
     public partial class WriterViewModel
@@ -63,6 +63,22 @@ namespace alphaWriter.ViewModels
                     case "pass":
                         RebuildPassOptions();
                         StartPass(PassOptions.FirstOrDefault(o => o.RuleId == value));
+                        break;
+                    case "syncfolder":
+                        SyncFolder = value;
+                        SyncEnabled = true;
+                        break;
+                    case "sync" when value == "off":
+                        SyncEnabled = false;
+                        break;
+                    case "syncdevice":
+                        SyncDeviceName = value;
+                        break;
+                    case "syncnow" when value == "on":
+                        await RunSyncAsync(manual: true);
+                        break;
+                    case "syncsettings" when value == "on":
+                        OpenSyncSettings();
                         break;
                     case "exportchapter":
                         ExportChapter(SelectedBook?.Chapters.FirstOrDefault(c => c.Title == value));

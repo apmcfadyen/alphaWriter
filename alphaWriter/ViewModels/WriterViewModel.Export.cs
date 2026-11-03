@@ -28,10 +28,10 @@ namespace alphaWriter.ViewModels
 
         [ObservableProperty]
         [NotifyPropertyChangedFor(nameof(IsExportStyleRelevant))]
-        private string exportFormat = ExportPref("export.format", "Word (.docx)");
+        private string exportFormat = LoadPref("export.format", "Word (.docx)");
 
         [ObservableProperty]
-        private string exportStyle = ExportPref("export.style", "Standard manuscript");
+        private string exportStyle = LoadPref("export.style", "Standard manuscript");
 
         [ObservableProperty]
         private string exportHeadings = "Chapter 1: Title";
@@ -71,17 +71,17 @@ namespace alphaWriter.ViewModels
         /// <summary>Page layout only applies to Word and PDF.</summary>
         public bool IsExportStyleRelevant => ExportFormat is "Word (.docx)" or "PDF";
 
-        partial void OnExportFormatChanged(string value) => SetExportPref("export.format", value);
-        partial void OnExportStyleChanged(string value) => SetExportPref("export.style", value);
+        partial void OnExportFormatChanged(string value) => StorePref("export.format", value);
+        partial void OnExportStyleChanged(string value) => StorePref("export.style", value);
 
         // Remembered choices are a convenience: never fail over them (no platform preferences in tests)
-        private static string ExportPref(string key, string fallback)
+        private static string LoadPref(string key, string fallback)
         {
             try { return AppPreferences.Get(key, fallback); }
             catch { return fallback; }
         }
 
-        private static void SetExportPref(string key, string value)
+        private static void StorePref(string key, string value)
         {
             try { AppPreferences.Set(key, value); }
             catch { }
@@ -160,7 +160,7 @@ namespace alphaWriter.ViewModels
                 var book = SelectedBook;
                 var file = await Task.Run(() => ExportService.Export(book, options));
 
-                var lastFolder = ExportPref("export.folder", string.Empty);
+                var lastFolder = LoadPref("export.folder", string.Empty);
                 using var stream = new MemoryStream(file.Data);
                 var result = Directory.Exists(lastFolder)
                     ? await FileSaver.Default.SaveAsync(lastFolder, file.FileName, stream, CancellationToken.None)
@@ -169,7 +169,7 @@ namespace alphaWriter.ViewModels
                 if (result.IsSuccessful)
                 {
                     if (Path.GetDirectoryName(result.FilePath) is { Length: > 0 } folder)
-                        SetExportPref("export.folder", folder);
+                        StorePref("export.folder", folder);
                     ExportStatus = $"Saved {Path.GetFileName(result.FilePath)}.";
                 }
                 else

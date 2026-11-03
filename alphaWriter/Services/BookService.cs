@@ -66,27 +66,47 @@ namespace alphaWriter.Services
             await _gate.WaitAsync();
             try
             {
-                if (File.Exists(Path.Combine(_root, LegacyFile)) && !Directory.Exists(BooksRoot))
-                    MigrateLegacyLibrary();
-
-                // Migration couldn't be verified: keep using the old file untouched
-                if (!Directory.Exists(BooksRoot))
-                    return await LoadLegacyAsync();
-
-                var books = new List<Book>();
-                foreach (var dir in Directory.EnumerateDirectories(BooksRoot))
-                {
-                    var book = TryLoadBook(dir);
-                    if (book is null) continue;   // unreadable: left alone, never deleted
-                    books.Add(book);
-                    _knownBookIds.Add(book.Id);
-                }
-                return OrderBooks(books);
+                return await LoadCoreAsync();
             }
             finally
             {
                 _gate.Release();
             }
+        }
+
+        public async Task<List<Book>?> RunExclusiveAsync(Func<Task<bool>> work)
+        {
+            await _gate.WaitAsync();
+            try
+            {
+                return await work() ? await LoadCoreAsync() : null;
+            }
+            finally
+            {
+                _gate.Release();
+            }
+        }
+
+        private async Task<List<Book>> LoadCoreAsync()
+        {
+            if (File.Exists(Path.Combine(_root, LegacyFile)) && !Directory.Exists(BooksRoot))
+                MigrateLegacyLibrary();
+
+            // Migration couldn't be verified: keep using the old file untouched
+            if (!Directory.Exists(BooksRoot))
+                return await LoadLegacyAsync();
+
+            var books = new List<Book>();
+            _knownBookIds.Clear();
+            _written.Clear();
+            foreach (var dir in Directory.EnumerateDirectories(BooksRoot))
+            {
+                var book = TryLoadBook(dir);
+                if (book is null) continue;   // unreadable: left alone, never deleted
+                books.Add(book);
+                _knownBookIds.Add(book.Id);
+            }
+            return OrderBooks(books);
         }
 
         public async Task SaveBooksAsync(List<Book> books)

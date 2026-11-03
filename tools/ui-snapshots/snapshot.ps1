@@ -40,7 +40,9 @@ param(
         "book"           = "book=first;workspace=Book"
     },
     [int] $StartupSeconds = 12,
-    [int] $SettleSeconds = 2
+    [int] $SettleSeconds = 2,
+    # Use the library already in -DataDir instead of a fresh sample (e.g. to check sync results)
+    [switch] $KeepData
 )
 
 $ErrorActionPreference = "Stop"
@@ -79,8 +81,10 @@ $results = @()
 
 foreach ($name in $States.Keys) {
     # Fresh sample data for every state
-    if (Test-Path $DataDir) { Remove-Item -Recurse -Force $DataDir }
-    python $generator $DataDir | Out-Null
+    if (-not $KeepData) {
+        if (Test-Path $DataDir) { Remove-Item -Recurse -Force $DataDir }
+        python $generator $DataDir | Out-Null
+    }
 
     $env:ALPHAWRITER_DATA_DIR = $DataDir
     $env:ALPHAWRITER_UI_STATE = $States[$name]

@@ -24,6 +24,9 @@ namespace alphaWriter.Views
             _viewModel.ReportsPanelShown += () => _ = LoadReportAsync();
             _viewModel.AnnotationsChanged += () => _ = PushAnnotationsAsync();
             _viewModel.NoteNavigationRequested += OnNoteNavigationRequested;
+            // Sync saves the editor's latest words before comparing files
+            _viewModel.FlushEditorAsync = () =>
+                _currentEditorScene is { } scene ? FlushEditorContentAsync(scene) : Task.CompletedTask;
 
             // Scene inspector: remember whether the author keeps it open
             _viewModel.IsMetadataPanelVisible = AppPreferences.Get("inspectorVisible", true);

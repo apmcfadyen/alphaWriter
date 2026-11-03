@@ -64,6 +64,15 @@
             <Label Style="{StaticResource StatusText}"
                    Text="{Binding SaveStateText}"
                    ToolTipProperties.Text="Your work is saved automatically" />
+            <Label Style="{StaticResource StatusDivider}" IsVisible="{Binding IsSyncStatusVisible}" />
+            <Label Style="{StaticResource StatusText}"
+                   Text="{Binding SyncStatusText}"
+                   IsVisible="{Binding IsSyncStatusVisible}"
+                   ToolTipProperties.Text="Sync with your shared folder. Click for sync settings.">
+                <Label.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding OpenSyncSettingsCommand}" />
+                </Label.GestureRecognizers>
+            </Label>
         </HorizontalStackLayout>
     </Grid>
 </ContentView>
