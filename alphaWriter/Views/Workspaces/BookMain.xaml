@@ -28,7 +28,7 @@
                    VerticalOptions="Center" />
         </Grid>
 
-        <ScrollView Grid.Row="1">
+        <ScrollView Grid.Row="1" x:Name="Scroller">
             <VerticalStackLayout Padding="16,16,24,24" Spacing="12" MaximumWidthRequest="760" HorizontalOptions="Start">
 
                 <Label Text="BOOK DETAILS" Style="{StaticResource PanelHeaderLabel}" />
@@ -76,6 +76,85 @@
                                  BackgroundColor="{StaticResource SurfaceRaised}"
                                  HeightRequest="6" />
                 </VerticalStackLayout>
+
+                <!-- Export: the whole book or chosen chapters, to Word, PDF, Markdown or text -->
+                <Label x:Name="ExportHeader" Text="EXPORT" Style="{StaticResource PanelHeaderLabel}" Margin="0,8,0,0" />
+
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="4" MaximumWidthRequest="360" HorizontalOptions="Start">
+                    <Button Grid.Column="0" Text="Whole book"
+                            Style="{StaticResource SidebarTabButton}"
+                            BackgroundColor="{Binding ExportWholeBook, Converter={StaticResource SelectedTabConverter}}"
+                            TextColor="{Binding ExportWholeBook, Converter={StaticResource SelectedTabConverter}, ConverterParameter=text}"
+                            Command="{Binding SetExportScopeCommand}" CommandParameter="book" />
+                    <Button Grid.Column="1" Text="Chosen chapters"
+                            Style="{StaticResource SidebarTabButton}"
+                            BackgroundColor="{Binding ExportWholeBook, Converter={StaticResource SelectedTabConverter}, ConverterParameter=False}"
+                            TextColor="{Binding ExportWholeBook, Converter={StaticResource SelectedTabConverter}, ConverterParameter='False;text'}"
+                            Command="{Binding SetExportScopeCommand}" CommandParameter="chapters" />
+                </Grid>
+
+                <VerticalStackLayout BindableLayout.ItemsSource="{Binding ExportChapters}"
+                                     IsVisible="{Binding IsExportChapterListVisible}" Spacing="0">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ExportChapterOption">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                                <CheckBox IsChecked="{Binding IsSelected}" Color="{StaticResource AccentPrimary}" VerticalOptions="Center" />
+                                <Label Grid.Column="1" Text="{Binding Label}" TextColor="{StaticResource TextPrimary}"
+                                       FontSize="13" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                            </Grid>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </VerticalStackLayout>
+
+                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="6"
+                      MaximumWidthRequest="460" HorizontalOptions="Start">
+                    <Label Grid.Row="0" Text="Format" Style="{StaticResource FieldLabel}" VerticalOptions="Center" />
+                    <Picker Grid.Row="0" Grid.Column="1" ItemsSource="{Binding ExportFormatOptions}"
+                            SelectedItem="{Binding ExportFormat}" TextColor="{StaticResource TextPrimary}" />
+                    <Label Grid.Row="1" Text="Layout" Style="{StaticResource FieldLabel}" VerticalOptions="Center"
+                           IsVisible="{Binding IsExportStyleRelevant}" />
+                    <Picker Grid.Row="1" Grid.Column="1" ItemsSource="{Binding ExportStyleOptions}"
+                            SelectedItem="{Binding ExportStyle}" TextColor="{StaticResource TextPrimary}"
+                            IsVisible="{Binding IsExportStyleRelevant}"
+                            ToolTipProperties.Text="Standard manuscript: 12 pt, double-spaced, title page and running header, as agents and editors expect. Reading copy: a single-spaced book layout." />
+                    <Label Grid.Row="2" Text="Chapter headings" Style="{StaticResource FieldLabel}" VerticalOptions="Center" />
+                    <Picker Grid.Row="2" Grid.Column="1" ItemsSource="{Binding ExportHeadingOptions}"
+                            SelectedItem="{Binding ExportHeadings}" TextColor="{StaticResource TextPrimary}" />
+                    <Label Grid.Row="3" Text="Scene break" Style="{StaticResource FieldLabel}" VerticalOptions="Center" />
+                    <Picker Grid.Row="3" Grid.Column="1" ItemsSource="{Binding ExportSceneBreakOptions}"
+                            SelectedItem="{Binding ExportSceneBreak}" TextColor="{StaticResource TextPrimary}" />
+                </Grid>
+
+                <VerticalStackLayout Spacing="0">
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                        <CheckBox IsChecked="{Binding ExportIncludeSceneTitles}" Color="{StaticResource AccentPrimary}" VerticalOptions="Center" />
+                        <Label Grid.Column="1" Text="Include scene titles" TextColor="{StaticResource TextPrimary}" FontSize="13" VerticalOptions="Center" />
+                    </Grid>
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                        <CheckBox IsChecked="{Binding ExportIncludeOutline}" Color="{StaticResource AccentPrimary}" VerticalOptions="Center" />
+                        <Label Grid.Column="1" Text="Include scenes still at Outline status" TextColor="{StaticResource TextPrimary}" FontSize="13" VerticalOptions="Center" />
+                    </Grid>
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6" IsVisible="{Binding IsExportStyleRelevant}">
+                        <CheckBox IsChecked="{Binding ExportTypewriterFont}" Color="{StaticResource AccentPrimary}" VerticalOptions="Center" />
+                        <Label Grid.Column="1" Text="Typewriter font (Courier)" TextColor="{StaticResource TextPrimary}" FontSize="13" VerticalOptions="Center" />
+                    </Grid>
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                        <CheckBox IsChecked="{Binding ExportFilePerChapter}" Color="{StaticResource AccentPrimary}" VerticalOptions="Center" />
+                        <Label Grid.Column="1" Text="One file per chapter (saved together as a .zip)" TextColor="{StaticResource TextPrimary}" FontSize="13" VerticalOptions="Center" />
+                    </Grid>
+                </VerticalStackLayout>
+
+                <HorizontalStackLayout Spacing="12">
+                    <Button Text="Export…"
+                            Style="{StaticResource PrimaryActionButton}"
+                            Padding="18,6"
+                            Command="{Binding ExportBookCommand}" />
+                    <ActivityIndicator IsRunning="{Binding IsExporting}" IsVisible="{Binding IsExporting}"
+                                       Color="{StaticResource AccentPrimary}" HeightRequest="18" VerticalOptions="Center" />
+                </HorizontalStackLayout>
+                <Label Text="{Binding ExportStatus}" TextColor="{StaticResource TextSecondary}" FontSize="12"
+                       LineBreakMode="WordWrap"
+                       IsVisible="{Binding ExportStatus, Converter={StaticResource IsNotNullOrEmptyConverter}}" />
 
             </VerticalStackLayout>
         </ScrollView>

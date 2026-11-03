@@ -12,7 +12,7 @@ namespace alphaWriter.ViewModels
     /// <c>book=first</c>, <c>scene=&lt;title&gt;</c>, <c>character=&lt;name&gt;</c>,
     /// <c>insight=&lt;Frequency|Problems|Characters|DailyProgress|report:Entities&gt;</c>,
     /// <c>scope=scene|book</c>, <c>inspector=on|off</c>, <c>sidebar=on|off</c>,
-    /// <c>settings=on</c>, <c>analyze=on</c> (runs a whole-book analysis), <c>section=&lt;report element id&gt;</c>, <c>passes=on</c>, <c>scan=on</c> (Story Bible entity scan), <c>export=on</c>, <c>pass=&lt;rule id&gt;</c>, <c>filter=&lt;editor&gt;</c>,
+    /// <c>settings=on</c>, <c>analyze=on</c> (runs a whole-book analysis), <c>section=&lt;report element id&gt;</c>, <c>passes=on</c>, <c>scan=on</c> (Story Bible entity scan), <c>exportfile=&lt;format&gt;</c>, <c>export=on</c>, <c>pass=&lt;rule id&gt;</c>, <c>filter=&lt;editor&gt;</c>,
     /// <c>workspace=&lt;Write|StoryBible|Revise|Insights|Book&gt;</c>.
     /// </remarks>
     public partial class WriterViewModel
@@ -63,6 +63,23 @@ namespace alphaWriter.ViewModels
                     case "pass":
                         RebuildPassOptions();
                         StartPass(PassOptions.FirstOrDefault(o => o.RuleId == value));
+                        break;
+                    case "exportchapter":
+                        ExportChapter(SelectedBook?.Chapters.FirstOrDefault(c => c.Title == value));
+                        break;
+                    case "exportfile" when SelectedBook is not null:
+                        // Writes an export into the sandbox folder (no save dialog): exportfile=PDF etc.
+                        try
+                        {
+                            ExportFormat = value;
+                            if (value == "PDF") await Services.Export.PdfFonts.LoadBundledAsync();
+                            var file = Services.Export.ExportService.Export(SelectedBook, BuildExportOptions());
+                            var folder = System.IO.Path.Combine(Services.AppPaths.DataDirectory, "exports");
+                            System.IO.Directory.CreateDirectory(folder);
+                            await System.IO.File.WriteAllBytesAsync(System.IO.Path.Combine(folder, file.FileName), file.Data);
+                            ExportStatus = $"Wrote {file.FileName}";
+                        }
+                        catch (Exception ex) { ExportStatus = $"Export failed: {ex.Message}"; }
                         break;
                     case "scan" when value == "on":
                         await ScanEntities();

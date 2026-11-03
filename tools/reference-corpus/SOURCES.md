@@ -1,5 +1,17 @@
 # Reference corpus sources
 
+## PDF export fonts
+
+`alphaWriter/Resources/Raw/fonts` holds the fonts used for PDF export, bundled because
+PDFs are drawn without system fonts (Android has none of the usual ones). Both are under
+the SIL Open Font License 1.1; the licence texts sit beside the font files.
+
+- **Literata** (Regular, Bold, Italic, Bold Italic), static TTFs from
+  https://github.com/googlefonts/literata. Copyright 2017 The Literata Project Authors.
+- **Courier Prime** (Regular, Bold, Italic, Bold Italic), from
+  https://github.com/google/fonts/tree/main/ofl/courierprime. Copyright 2015 The Courier
+  Prime Project Authors.
+
 ## Sensory lexicon
 
 `sensorimotor.tsv` (built by `build_sensorimotor.py`) keeps the six perceptual ratings

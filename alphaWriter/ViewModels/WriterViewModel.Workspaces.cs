@@ -81,6 +81,9 @@ namespace alphaWriter.ViewModels
                     ActiveStatsTab = _insightsStatsTab;
                     if (SelectedBook is not null) ComputeStatistics();
                     break;
+                case Workspace.Book:
+                    RefreshExportChapters();
+                    break;
                 case Workspace.StoryBible:
                     if (SidebarMode == SidebarMode.Chapters) SidebarMode = SidebarMode.Characters;
                     break;

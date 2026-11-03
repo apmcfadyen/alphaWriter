@@ -1,4 +1,5 @@
 using alphaWriter.Services;
+using CommunityToolkit.Maui;
 using alphaWriter.Services.Nlp;
 using alphaWriter.ViewModels;
 using alphaWriter.Views;
@@ -13,6 +14,7 @@ namespace alphaWriter
             var builder = MauiApp.CreateBuilder();
             builder
                 .UseMauiApp<App>()
+                .UseMauiCommunityToolkit()   // file save dialog for exports
                 .ConfigureFonts(fonts =>
                 {
                     fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
