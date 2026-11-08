@@ -19,6 +19,13 @@ namespace alphaWriter.Views.Workspaces
         private OutlineRow? _dragging;
         private bool _dropAfter;
 
+        /// <summary>Right-click (long-press on touch) menu on a chapter row.</summary>
+        private void OnExportChapterClicked(object? sender, EventArgs e)
+        {
+            if (sender is Element { BindingContext: ChapterOutlineRow row })
+                ViewModel?.ExportChapterCommand.Execute(row.Chapter);
+        }
+
         private void OnRowDragStarting(object? sender, DragStartingEventArgs e)
         {
             if (sender is Element { BindingContext: OutlineRow row })

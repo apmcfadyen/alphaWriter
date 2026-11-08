@@ -263,7 +263,7 @@ namespace alphaWriter.ViewModels
             Books = new ObservableCollection<Book>(loaded);
 
             // Restore last-opened book across sessions
-            var lastId = AppPreferences.Get("lastBookId", string.Empty);
+            var lastId = LoadPref("lastBookId", string.Empty);
             if (!string.IsNullOrEmpty(lastId))
             {
                 var lastBook = Books.FirstOrDefault(b => b.Id == lastId);
@@ -273,6 +273,8 @@ namespace alphaWriter.ViewModels
                     RestoreWorkspace();
                 }
             }
+
+            StartSyncing();
         }
 
         // ── Selection change handlers ──────────────────────────────────────────
@@ -316,7 +318,7 @@ namespace alphaWriter.ViewModels
                 _ = TryLoadPersistedAnalysisAsync(value);
 
             // Persist last-opened book across sessions
-            AppPreferences.Set("lastBookId", value?.Id ?? string.Empty);
+            StorePref("lastBookId", value?.Id ?? string.Empty);
             UpdateBreadcrumb();
 
             // Pick up where the author left off in this book
@@ -433,7 +435,8 @@ namespace alphaWriter.ViewModels
                 SelectedBook = null;
             Books.Remove(book);
 
-            // Clean up stored images for this book
+            // The book's folder (scenes and pictures) is removed when the library is saved.
+            // Pictures from before per-book folders lived here:
             var imageDir = Path.Combine(AppPaths.DataDirectory, "images", book.Id);
             if (Directory.Exists(imageDir))
             {
@@ -2158,6 +2161,13 @@ namespace alphaWriter.ViewModels
 
         private async Task TriggerSaveAsync()
         {
+            // A sync is rewriting files: save once it has finished (and swapped in its changes)
+            if (_syncInProgress)
+            {
+                _saveAfterSync = true;
+                return;
+            }
+
             // Snapshot every book's current word count for daily progress tracking
             var today = DateTime.Today.ToString("yyyy-MM-dd");
             foreach (var book in Books)
