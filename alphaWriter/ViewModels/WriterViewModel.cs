@@ -505,11 +505,18 @@ namespace alphaWriter.ViewModels
 
         // ── Chapter commands ───────────────────────────────────────────────────
 
+        /// <summary>Asks for a new chapter's title; null when cancelled. Replaced in tests.</summary>
+        internal Func<Task<string?>> AskChapterTitle { get; set; } = () =>
+            Shell.Current.DisplayPromptAsync("New Chapter", "Chapter title:", accept: "Add", placeholder: "Chapter title");
+
         [RelayCommand]
         private async Task AddChapter()
         {
             if (SelectedBook is null) return;
-            var chapter = new Chapter { Title = "New Chapter" };
+            var title = (await AskChapterTitle())?.Trim();
+            if (string.IsNullOrEmpty(title)) return;   // cancelled or left blank: no chapter
+
+            var chapter = new Chapter { Title = title };
             SelectedBook.Chapters.Add(chapter);
             SelectedChapter = chapter;
             await TriggerSaveAsync();
@@ -1419,7 +1426,6 @@ namespace alphaWriter.ViewModels
         {
             if (reportType == ActiveReportType) return;
             ActiveReportType = reportType;
-            ReportsPanelShown?.Invoke();
         }
 
         [RelayCommand]

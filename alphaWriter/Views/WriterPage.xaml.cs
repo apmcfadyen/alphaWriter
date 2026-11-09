@@ -464,6 +464,7 @@ namespace alphaWriter.Views
                         html = html.Replace("</body>",
                             $"<script>document.getElementById('{target}').scrollIntoView();</" + "script></body>");
 #endif
+                    if (_viewModel.ActiveReportType != "NLP") return;   // switched away while loading
                     await MainThread.InvokeOnMainThreadAsync(() =>
                         ReportWebView.Source = new HtmlWebViewSource { Html = html });
                 }
@@ -482,6 +483,7 @@ namespace alphaWriter.Views
                         $"[REPORT] LoadReportAsync Entities: dataJson length={dataJson.Length}, " +
                         $"visJs length={_cachedVisNetworkJs.Length}");
                     var html = BuildReportHtml(_cachedVisNetworkJs, dataJson);
+                    if (_viewModel.ActiveReportType == "NLP") return;   // switched away while loading
                     await MainThread.InvokeOnMainThreadAsync(() =>
                         ReportWebView.Source = new HtmlWebViewSource { Html = html });
                 }

@@ -36,6 +36,50 @@ public class WorkspaceViewModelTests
         return vm;
     }
 
+    private static (WriterViewModel Vm, List<string> Loads) ReportsViewModel()
+    {
+        var vm = CreateViewModel(SampleBook());
+        typeof(WriterViewModel).GetField("_analysisResults", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(vm, new List<SceneAnalysisResult> { new() });
+        var loads = new List<string>();
+        vm.ReportsPanelShown += () => loads.Add(vm.ActiveReportType);
+        return (vm, loads);
+    }
+
+    [Fact]
+    public void Reports_SwitchingBetweenThem_ReloadsTheWebView()
+    {
+        var (vm, loads) = ReportsViewModel();
+        vm.OpenInsightCommand.Execute("report:Entities");
+        vm.OpenInsightCommand.Execute("report:NLP");
+        vm.OpenInsightCommand.Execute("report:Entities");
+
+        Assert.Equal(["Entities", "NLP", "Entities"], loads);
+        Assert.Equal("Insights — story map", vm.ReportPanelTitle);
+    }
+
+    [Fact]
+    public void Reports_OpeningFromElsewhere_LoadsOnce()
+    {
+        var (vm, loads) = ReportsViewModel();
+        vm.OpenInsightCommand.Execute("Frequency");
+        loads.Clear();
+
+        vm.OpenInsightCommand.Execute("report:NLP");   // from a statistics view in Insights
+        Assert.Equal(["NLP"], loads);
+
+        vm.OpenInsightCommand.Execute("report:NLP");   // already showing: nothing to reload
+        Assert.Equal(["NLP"], loads);
+    }
+
+    [Fact]
+    public void Reports_ChangingTypeWhileHidden_DoesNotLoad()
+    {
+        var (vm, loads) = ReportsViewModel();
+        vm.ActiveReportType = "NLP";   // Write workspace: no report on screen
+        Assert.Empty(loads);
+    }
+
     private static Book SampleBook()
     {
         var book = new Book { Title = "B" };
@@ -284,6 +328,75 @@ public class WorkspaceViewModelTests
 
         vm.ToggleChapterExpandedCommand.Execute(one);
         Assert.Equal(["One", "1a", "1b", "Two", "2a"], vm.OutlineRows.Select(Label).ToArray());
+    }
+
+    [Fact]
+    public void AddChapter_UsesTheTitleEntered()
+    {
+        var book = SampleBook();
+        var vm = CreateViewModel(book);
+        vm.AskChapterTitle = () => Task.FromResult<string?>("  The Docks ");
+
+        vm.AddChapterCommand.Execute(null);
+
+        Assert.Equal("The Docks", book.Chapters[^1].Title);
+        Assert.Equal(3, book.Chapters.Count);
+        Assert.Same(book.Chapters[^1], vm.SelectedChapter);
+    }
+
+    [Theory]
+    [InlineData(null)]     // cancelled
+    [InlineData("")]
+    [InlineData("   ")]
+    public void AddChapter_WithoutATitle_CreatesNothing(string? answer)
+    {
+        var book = SampleBook();
+        var vm = CreateViewModel(book);
+        vm.AskChapterTitle = () => Task.FromResult(answer);
+
+        vm.AddChapterCommand.Execute(null);
+
+        Assert.Equal(2, book.Chapters.Count);
+    }
+
+    [Fact]
+    public void Outline_HideAllThenExpandAll()
+    {
+        var vm = CreateViewModel(SampleBook());
+        Assert.Equal("Hide all", vm.ToggleAllChaptersText);
+
+        vm.ToggleAllChaptersCommand.Execute(null);
+        Assert.Equal(["One", "Two"], vm.OutlineRows.Select(Label).ToArray());
+        Assert.All(vm.OutlineRows.OfType<ChapterOutlineRow>(), c => Assert.False(c.IsExpanded));
+        Assert.Equal("Expand all", vm.ToggleAllChaptersText);
+
+        vm.ToggleAllChaptersCommand.Execute(null);
+        Assert.Equal(["One", "1a", "1b", "Two", "2a"], vm.OutlineRows.Select(Label).ToArray());
+        Assert.Equal("Hide all", vm.ToggleAllChaptersText);
+    }
+
+    [Fact]
+    public void Outline_ToggleAll_FollowsSingleChapters()
+    {
+        var vm = CreateViewModel(SampleBook());
+        var chapters = vm.OutlineRows.OfType<ChapterOutlineRow>().ToList();
+
+        vm.ToggleChapterExpandedCommand.Execute(chapters[0]);   // one still open: offers to hide
+        Assert.Equal("Hide all", vm.ToggleAllChaptersText);
+        vm.ToggleChapterExpandedCommand.Execute(chapters[1]);   // all folded by hand: offers to expand
+        Assert.Equal("Expand all", vm.ToggleAllChaptersText);
+    }
+
+    [Fact]
+    public void Outline_ToggleAll_HiddenUntilAChapterHasScenes()
+    {
+        var book = new Book { Title = "B" };
+        book.Chapters.Add(new Chapter { Title = "Empty" });
+        var vm = CreateViewModel(book);
+        Assert.False(vm.CanToggleAllChapters);
+
+        book.Chapters[0].Scenes.Add(new Scene { Title = "First" });
+        Assert.True(vm.CanToggleAllChapters);
     }
 
     [Fact]

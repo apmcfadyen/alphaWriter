@@ -71,6 +71,16 @@ namespace alphaWriter.ViewModels
                     case "sync" when value == "off":
                         SyncEnabled = false;
                         break;
+                    case "addchapter" when value == "on":
+                        MainThread.BeginInvokeOnMainThread(async () =>   // once the window is up; leaves the prompt open for a screenshot
+                        {
+                            await Task.Delay(3000);
+                            await AddChapter();
+                        });
+                        break;
+                    case "hideall" when value == "on":
+                        ToggleAllChapters();
+                        break;
                     case "syncmode":
                         SyncMode = value;
                         break;

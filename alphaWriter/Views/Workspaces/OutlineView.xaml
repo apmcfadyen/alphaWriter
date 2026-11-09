@@ -172,9 +172,15 @@
     </ContentView.Resources>
 
     <Grid RowDefinitions="Auto,*">
-        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Padding="0,4,4,0">
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" Padding="0,4,4,0">
             <Label Text="OUTLINE" Style="{StaticResource PanelHeaderLabel}" />
-            <Button Grid.Column="1" Text="+ Chapter"
+            <Button Grid.Column="1" Text="{Binding ToggleAllChaptersText}"
+                    Style="{StaticResource IconButton}"
+                    FontSize="11"
+                    Command="{Binding ToggleAllChaptersCommand}"
+                    IsVisible="{Binding CanToggleAllChapters}"
+                    ToolTipProperties.Text="Show or hide the scenes in every chapter" />
+            <Button Grid.Column="2" Text="+ Chapter"
                     Style="{StaticResource IconButton}"
                     FontSize="12"
                     Command="{Binding AddChapterCommand}"

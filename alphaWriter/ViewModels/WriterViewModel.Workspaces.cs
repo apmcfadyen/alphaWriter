@@ -108,6 +108,8 @@ namespace alphaWriter.ViewModels
         {
             OnPropertyChanged(nameof(ReportPanelTitle));
             OnPropertyChanged(nameof(ActiveInsight));
+            // Both reports share one web view: switching between them has to reload it
+            if (IsReportsPanelVisible) ReportsPanelShown?.Invoke();
         }
 
         private void NotifyWorkspaceDerived()
@@ -192,6 +194,7 @@ namespace alphaWriter.ViewModels
             _outlineChapters.Clear();
 
             OutlineRows.Clear();
+            NotifyToggleAllChapters();
             if (_outlineBook is null) return;
 
             int number = 1;
@@ -207,6 +210,7 @@ namespace alphaWriter.ViewModels
                         OutlineRows.Add(new SceneOutlineRow(scene, chapter));
             }
             SyncOutlineSelection();
+            NotifyToggleAllChapters();
         }
 
         /// <summary>Highlights the open scene, or the open chapter when no scene is open.</summary>
@@ -245,6 +249,35 @@ namespace alphaWriter.ViewModels
                     OutlineRows.RemoveAt(index + 1);
             }
             RememberCollapsedChapters();
+            NotifyToggleAllChapters();
+        }
+
+        private IEnumerable<Chapter> ChaptersWithScenes =>
+            _outlineBook?.Chapters.Where(c => c.Scenes.Count > 0) ?? [];
+
+        private bool AnyChapterExpanded => ChaptersWithScenes.Any(c => !_collapsedChapterIds.Contains(c.Id));
+
+        /// <summary>The outline header's link: nothing to fold until a chapter has scenes.</summary>
+        public bool CanToggleAllChapters => ChaptersWithScenes.Any();
+
+        public string ToggleAllChaptersText => AnyChapterExpanded ? "Hide all" : "Expand all";
+
+        private void NotifyToggleAllChapters()
+        {
+            OnPropertyChanged(nameof(CanToggleAllChapters));
+            OnPropertyChanged(nameof(ToggleAllChaptersText));
+        }
+
+        /// <summary>Folds every chapter's scenes away, or opens them all if they're all folded.</summary>
+        [RelayCommand]
+        private void ToggleAllChapters()
+        {
+            bool hide = AnyChapterExpanded;
+            foreach (var chapter in ChaptersWithScenes)
+                if (hide) _collapsedChapterIds.Add(chapter.Id);
+                else _collapsedChapterIds.Remove(chapter.Id);
+            RememberCollapsedChapters();
+            RebuildOutline();
         }
 
         /// <summary>Selecting a chapter shows its scenes; selecting a scene opens it in the editor.</summary>

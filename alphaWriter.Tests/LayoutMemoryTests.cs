@@ -100,6 +100,18 @@ public class LayoutMemoryTests
         Assert.DoesNotContain(fresh.OutlineRows, r => r is SceneOutlineRow s && s.Chapter == book.Chapters[1]);
     }
 
+    [Fact]
+    public void HideAll_IsRememberedPerBook()
+    {
+        var book = SampleBook();
+        var (vm, store) = Create(book);
+        vm.ToggleAllChaptersCommand.Execute(null);
+
+        var (fresh, _) = Create(book, store);
+        Assert.DoesNotContain(fresh.OutlineRows, r => r is SceneOutlineRow);
+        Assert.Equal("Expand all", fresh.ToggleAllChaptersText);
+    }
+
     [Theory]
     [InlineData("1", Workspace.Write)]
     [InlineData("2", Workspace.StoryBible)]
