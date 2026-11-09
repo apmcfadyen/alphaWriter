@@ -440,4 +440,74 @@ public sealed class SyncTests : IDisposable
         vm.ApplySyncedBooks([book], [book.Id], null, null);
         Assert.Same(book, vm.SelectedBook);
     }
+
+    // ── SMB (Android) ────────────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData(@"\nas\writing\alphaWriter", "nas", "writing", "alphaWriter")]
+    [InlineData("//192.168.1.20/writing/books/alphaWriter", "192.168.1.20", "writing", @"books\alphaWriter")]
+    [InlineData("smb://nas/writing", "nas", "writing", "")]
+    [InlineData(@"  \nas\writing\  ", "nas", "writing", "")]
+    public void Smb_ReadsShareAddresses(string address, string server, string share, string folder)
+    {
+        var parsed = SmbSettings.ParseAddress(address);
+        Assert.Equal((server, share, folder), parsed);
+    }
+
+    [Theory]
+    [InlineData(@"\nas")]
+    [InlineData("")]
+    [InlineData(null)]
+    public void Smb_IncompleteAddress_IsRejected(string? address) => Assert.Null(SmbSettings.ParseAddress(address));
+
+    [Fact]
+    public void Smb_MapsSyncPathsIntoTheShareFolder()
+    {
+        var store = new SmbSyncStore(new SmbSettings("nas", "writing", @"books\alphaWriter", "ann", "pw"));
+        Assert.Equal(@"books\alphaWriter\books\b1\scenes\s1.html", store.SharePath("books/b1/scenes/s1.html"));
+        Assert.Equal(@"books\alphaWriter", store.SharePath(""));
+        Assert.Equal("smb://nas/writing/books/alphaWriter", store.Location);
+        Assert.Equal(@"books\b1\book.json", new SmbSyncStore(new SmbSettings("nas", "writing", "", "", "")).SharePath("books/b1/book.json"));
+    }
+
+    [Theory]
+    [InlineData(@"HOME\ann", "HOME", "ann")]
+    [InlineData("ann", "", "ann")]
+    public void Smb_SplitsDomainFromUser(string user, string domain, string name) =>
+        Assert.Equal((domain, name), new SmbSettings("nas", "s", "", user, "pw").Account);
+
+    [Fact]
+    public async Task Smb_UnknownServer_GivesAPlainMessage()
+    {
+        using var store = new SmbSyncStore(new SmbSettings("no-such-nas.invalid", "writing", "", "ann", "pw"));
+        var ex = await Assert.ThrowsAsync<IOException>(() => store.ListAsync("books"));
+        Assert.Contains("Couldn't reach no-such-nas.invalid", ex.Message);
+    }
+
+    [Fact]
+    public void Settings_ServerModeNeedsAShareAddress()
+    {
+        var (vm, _) = AppWithBook();
+        vm.SyncMode = "SMB server";
+        vm.SmbAddress = "nas";
+        var (store, problem) = vm.CreateRemoteStore();
+        Assert.Null(store);
+        Assert.Contains(@"\server\share\folder", problem);
+
+        vm.SmbAddress = @"\nas\writing\alphaWriter";
+        var (smb, _) = vm.CreateRemoteStore();
+        Assert.IsType<SmbSyncStore>(smb);
+        Assert.Equal("smb://nas/writing/alphaWriter", smb!.Location);
+    }
+
+    [Fact]
+    public void Settings_FolderModeChecksTheFolderIsThere()
+    {
+        var (vm, _) = AppWithBook();
+        vm.SyncMode = "Folder";
+        vm.SyncFolder = Path.Combine(_tmp, "missing");
+        Assert.StartsWith("Offline", vm.CreateRemoteStore().Problem);
+        Directory.CreateDirectory(vm.SyncFolder);
+        Assert.IsType<FolderSyncStore>(vm.CreateRemoteStore().Store);
+    }
 }

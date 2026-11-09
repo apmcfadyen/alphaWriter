@@ -26,6 +26,15 @@ emotion and embedding models (~330 MB) are not stored in the repository: downloa
 (Revise › Download models). Books, settings and analysis results live in the app's
 local data folder on each machine, so copy that folder if you want your library on another computer.
 
+### Third-party libraries
+
+Besides the .NET and MAUI libraries, alphaWriter uses CommunityToolkit.Mvvm and CommunityToolkit.Maui,
+DocumentFormat.OpenXml and PDFsharp-MigraDoc (export), Catalyst, Microsoft.ML.OnnxRuntime and
+Microsoft.ML.Tokenizers (language analysis), all MIT-licensed, and
+[SMBLibrary](https://github.com/TalAloni/SMBLibrary) (LGPL-3.0-or-later), used unmodified as a NuGet
+package to sync with network shares on Android. Bundled data and fonts are listed with their licences in
+`tools/reference-corpus/SOURCES.md`.
+
 ## Core Features:
 - Scene, Chapter, and Book aggregated wordcounts
 - Ability to set book wordcount goal with dynamic percentage of total

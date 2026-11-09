@@ -166,14 +166,45 @@
                     <Label Grid.Column="1" Text="Sync this device" TextColor="{StaticResource TextPrimary}" FontSize="13" VerticalOptions="Center" />
                 </Grid>
 
-                <Label Text="Sync folder" Style="{StaticResource FieldLabel}" />
-                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                    <Entry Text="{Binding SyncFolder}"
-                           Style="{StaticResource ElementFieldEntry}"
-                           Placeholder="e.g. \\nas\writing\alphaWriter" />
-                    <Button Grid.Column="1" Text="Browse…" Style="{StaticResource SidebarTabButton}"
-                            Command="{Binding BrowseSyncFolderCommand}" VerticalOptions="Center" />
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12" IsVisible="{Binding CanChooseSyncMode}"
+                      MaximumWidthRequest="460" HorizontalOptions="Start">
+                    <Label Text="Connect through" Style="{StaticResource FieldLabel}" VerticalOptions="Center" />
+                    <Picker Grid.Column="1" ItemsSource="{Binding SyncModeOptions}" SelectedItem="{Binding SyncMode}"
+                            TextColor="{StaticResource TextPrimary}"
+                            ToolTipProperties.Text="Folder: a path Windows can open (a mapped drive or \\server\share). SMB server: connect with its own user name and password." />
                 </Grid>
+
+                <!-- A folder Windows can open -->
+                <VerticalStackLayout Spacing="12" IsVisible="{Binding IsSyncFolderMode}">
+                    <Label Text="Sync folder" Style="{StaticResource FieldLabel}" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <Entry Text="{Binding SyncFolder}"
+                               Style="{StaticResource ElementFieldEntry}"
+                               Placeholder="e.g. \\nas\writing\alphaWriter" />
+                        <Button Grid.Column="1" Text="Browse…" Style="{StaticResource SidebarTabButton}"
+                                Command="{Binding BrowseSyncFolderCommand}" VerticalOptions="Center" />
+                    </Grid>
+                </VerticalStackLayout>
+
+                <!-- An SMB server reached directly (always, on Android) -->
+                <VerticalStackLayout Spacing="12" IsVisible="{Binding IsSyncServerMode}">
+                    <Label Text="Shared folder" Style="{StaticResource FieldLabel}" />
+                    <Entry Text="{Binding SmbAddress}"
+                           Style="{StaticResource ElementFieldEntry}"
+                           Placeholder="e.g. \\nas\writing\alphaWriter  or  \\192.168.1.20\writing\alphaWriter" />
+                    <Label Text="User name" Style="{StaticResource FieldLabel}" />
+                    <Entry Text="{Binding SmbUser}"
+                           Style="{StaticResource ElementFieldEntry}"
+                           Placeholder="The account you use for the share" />
+                    <Label Text="Password" Style="{StaticResource FieldLabel}" />
+                    <Entry Text="{Binding SmbPassword}"
+                           Style="{StaticResource ElementFieldEntry}"
+                           IsPassword="True"
+                           ToolTipProperties.Text="Kept in this device's secure storage" />
+                    <Button Text="Test connection" Style="{StaticResource SidebarTabButton}"
+                            HorizontalOptions="Start"
+                            Command="{Binding TestSyncConnectionCommand}" />
+                </VerticalStackLayout>
 
                 <Label Text="This device's name" Style="{StaticResource FieldLabel}" />
                 <Entry Text="{Binding SyncDeviceName}"

@@ -27,6 +27,41 @@ namespace alphaWriter.ViewModels
         [ObservableProperty]
         private string syncDeviceName = LoadPref("sync.device", DefaultDeviceName());
 
+        public IReadOnlyList<string> SyncModeOptions { get; } = ["Folder", "SMB server"];
+
+        /// <summary>"Folder" (a path Windows can open) or "SMB server" (connect directly; the only choice on Android).</summary>
+        [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(IsSyncFolderMode))]
+        [NotifyPropertyChangedFor(nameof(IsSyncServerMode))]
+        private string syncMode = LoadPref("sync.mode", DefaultSyncMode());
+
+        /// <summary>\\server\share\folder (or smb://server/share/folder).</summary>
+        [ObservableProperty]
+        private string smbAddress = LoadPref("sync.smb.address", string.Empty);
+
+        [ObservableProperty]
+        private string smbUser = LoadPref("sync.smb.user", string.Empty);
+
+        /// <summary>Kept in secure storage (Windows credential protection / Android Keystore), never in preferences or logs.</summary>
+        [ObservableProperty]
+        private string smbPassword = string.Empty;
+
+        public bool IsSyncFolderMode => SyncMode != "SMB server";
+        public bool IsSyncServerMode => SyncMode == "SMB server";
+
+        /// <summary>Android can't open network paths, so it always connects to the server directly.</summary>
+        public bool CanChooseSyncMode => DeviceInfo.Current.Platform == DevicePlatform.WinUI;
+
+        private const string PasswordKey = "sync.smb.password";
+        private bool _passwordLoaded;
+        private DateTime _lastSyncFinished = DateTime.MinValue;
+
+        private static string DefaultSyncMode()
+        {
+            try { return DeviceInfo.Current.Platform == DevicePlatform.WinUI ? "Folder" : "SMB server"; }
+            catch { return "Folder"; }
+        }
+
         [ObservableProperty]
         private string syncStatusText = "Not synced yet";
 
@@ -63,6 +98,83 @@ namespace alphaWriter.ViewModels
         }
 
         partial void OnSyncFolderChanged(string value) => StorePref("sync.folder", value?.Trim() ?? string.Empty);
+        partial void OnSyncModeChanged(string value) => StorePref("sync.mode", value);
+        partial void OnSmbAddressChanged(string value) => StorePref("sync.smb.address", value?.Trim() ?? string.Empty);
+        partial void OnSmbUserChanged(string value) => StorePref("sync.smb.user", value?.Trim() ?? string.Empty);
+
+        partial void OnSmbPasswordChanged(string value)
+        {
+            if (!_passwordLoaded) return;   // the value just read back from secure storage
+            _ = SavePasswordAsync(value);
+        }
+
+        private static async Task SavePasswordAsync(string value)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(value)) SecureStorage.Default.Remove(PasswordKey);
+                else await SecureStorage.Default.SetAsync(PasswordKey, value);
+            }
+            catch { /* secure storage unavailable: the password just isn't remembered */ }
+        }
+
+        private async Task LoadPasswordAsync()
+        {
+            try { SmbPassword = await SecureStorage.Default.GetAsync(PasswordKey) ?? string.Empty; }
+            catch { SmbPassword = string.Empty; }
+            finally { _passwordLoaded = true; }
+        }
+
+        /// <summary>The shared folder as a store, per the chosen mode. Null (with a reason) when it isn't set up.</summary>
+        internal (ISyncStore? Store, string Problem) CreateRemoteStore()
+        {
+            if (IsSyncServerMode)
+            {
+                if (SmbSyncStore.ParseAddressOrNull(SmbAddress) is not { } address)
+                    return (null, "Enter the share as \\\\server\\share\\folder.");
+                return (new SmbSyncStore(new SmbSettings(address.Server, address.Share, address.Folder, SmbUser, SmbPassword)), string.Empty);
+            }
+            var folder = SyncFolder?.Trim() ?? string.Empty;
+            if (folder.Length == 0) return (null, "Choose a sync folder first.");
+            if (!Directory.Exists(folder)) return (null, "Offline: the sync folder isn't reachable");
+            return (new FolderSyncStore(folder), string.Empty);
+        }
+
+        [RelayCommand]
+        private async Task TestSyncConnection()
+        {
+            var (store, problem) = CreateRemoteStore();
+            if (store is null) { SyncReportText = problem; return; }
+            SyncReportText = "Connecting…";
+            try
+            {
+                var books = (await store.ListAsync(SyncEngine.BooksPrefix)).Select(e => e.Path.Split('/')[1]).Distinct().Count();
+                SyncReportText = books == 0
+                    ? "Connected. The folder has no books yet: the first sync will upload this device's."
+                    : $"Connected. The folder holds {books} book{(books == 1 ? "" : "s")}.";
+            }
+            catch (Exception ex)
+            {
+                SyncReportText = ex.Message;
+            }
+            finally
+            {
+                (store as IDisposable)?.Dispose();
+            }
+        }
+
+        /// <summary>App back in front (Android resume, Windows restore): catch up if it's been a while.</summary>
+        public void OnAppResumed()
+        {
+            if (SyncEnabled && DateTime.Now - _lastSyncFinished > TimeSpan.FromMinutes(1))
+                _ = RunSyncAsync(manual: false);
+        }
+
+        /// <summary>App going to the background (Android sleep, Windows minimise): send what's new.</summary>
+        public void OnAppStopped()
+        {
+            if (SyncEnabled) _ = RunSyncAsync(manual: false);
+        }
         partial void OnSyncDeviceNameChanged(string value) => StorePref("sync.device", value?.Trim() ?? string.Empty);
 
         /// <summary>From the status bar: shows the sync settings in the Book workspace.</summary>
@@ -94,11 +206,12 @@ namespace alphaWriter.ViewModels
         private Task SyncNow() => RunSyncAsync(manual: true);
 
         /// <summary>Called once the library has loaded.</summary>
-        internal void StartSyncing()
+        internal async void StartSyncing()
         {
+            await LoadPasswordAsync();
             if (!SyncEnabled) { SyncStatusText = "Sync is off"; return; }
             StartSyncTimer();
-            _ = RunSyncAsync(manual: false);
+            await RunSyncAsync(manual: false);
         }
 
         private void StartSyncTimer()
@@ -127,10 +240,10 @@ namespace alphaWriter.ViewModels
                 if (manual) SyncStatusText = "Tick “Sync this device” first.";
                 return;
             }
-            var folder = SyncFolder?.Trim() ?? string.Empty;
-            if (folder.Length == 0)
+            var (remote, problem) = CreateRemoteStore();
+            if (remote is null)
             {
-                if (manual) SyncStatusText = "Choose a sync folder first.";
+                if (manual || problem.StartsWith("Offline", StringComparison.Ordinal)) SyncStatusText = problem;
                 return;
             }
 
@@ -138,11 +251,6 @@ namespace alphaWriter.ViewModels
             SyncStatusText = "Syncing…";
             try
             {
-                if (!Directory.Exists(folder))
-                {
-                    SyncStatusText = "Offline: the sync folder isn't reachable";
-                    return;
-                }
 
                 if (FlushEditorAsync is not null) await FlushEditorAsync();
                 await TriggerSaveAsync();
@@ -152,7 +260,7 @@ namespace alphaWriter.ViewModels
                 _syncInProgress = true;
 
                 var engine = new SyncEngine(
-                    new FolderSyncStore(AppPaths.DataDirectory), new FolderSyncStore(folder),
+                    new FolderSyncStore(AppPaths.DataDirectory), remote,
                     Path.Combine(AppPaths.DataDirectory, "sync"), SyncDeviceName);
                 SyncReport? report = null;
                 var reloaded = await _bookService.RunExclusiveAsync(async () =>
@@ -177,7 +285,12 @@ namespace alphaWriter.ViewModels
                 SyncStatusText = "Sync paused";
                 SyncReportText = ex.Message;
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            catch (UnauthorizedAccessException ex) when (IsSyncServerMode)
+            {
+                SyncStatusText = "Sync paused: sign-in failed";
+                SyncReportText = ex.Message;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Net.Sockets.SocketException)
             {
                 SyncStatusText = "Offline: the sync folder isn't reachable";
                 SyncReportText = ex.Message;
@@ -189,6 +302,8 @@ namespace alphaWriter.ViewModels
             }
             finally
             {
+                (remote as IDisposable)?.Dispose();
+                _lastSyncFinished = DateTime.Now;
                 _syncInProgress = false;
                 IsSyncing = false;
                 if (_saveAfterSync)
