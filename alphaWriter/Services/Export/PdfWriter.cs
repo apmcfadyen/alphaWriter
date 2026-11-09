@@ -1,10 +1,13 @@
 using System.Globalization;
-using MigraDoc.DocumentObjectModel;
-using MigraDoc.Rendering;
-using PdfSharp.Fonts;
 
 namespace alphaWriter.Services.Export
 {
+    // Imported inside the namespace so these names win over MAUI's project-wide usings
+    // (e.g. FontSize, Font), which differ by platform and clash on Android.
+    using MigraDoc.DocumentObjectModel;
+    using MigraDoc.Rendering;
+    using PdfSharp.Fonts;
+
     /// <summary>
     /// PDF via MigraDoc, with the same two layouts as the Word export. Fonts are bundled
     /// (Literata and Courier Prime, both SIL Open Font License) so PDFs look the same on

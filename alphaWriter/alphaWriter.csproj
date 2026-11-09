@@ -52,11 +52,11 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<!-- App Icon -->
-		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#512BD4" />
+		<!-- App Icon: the aW logo, scaled to fit Android's adaptive-icon safe zone, on its own navy -->
+		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.png" ForegroundScale="0.6" Color="#00001F" />
 
-		<!-- Splash Screen -->
-		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#512BD4" BaseSize="128,128" />
+		<!-- Splash Screen: the same logo on the same navy -->
+		<MauiSplashScreen Include="Resources\Splash\splash.png" Color="#00001F" BaseSize="128,128" />
 
 		<!-- Images -->
 		<MauiImage Include="Resources\Images\*" />
@@ -69,11 +69,19 @@
 		<MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
 	</ItemGroup>
 
+	<!-- Fast Deployment relies on Android's run-as, which some devices (e.g. Samsung tablets)
+	     refuse; put the app's code in the APK instead so debug deploys always install. -->
+	<PropertyGroup Condition="$(TargetFramework.Contains('-android')) and '$(Configuration)' == 'Debug'">
+		<EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
+	</PropertyGroup>
+
 	<ItemGroup>
 		<PackageReference Include="CommunityToolkit.Maui" Version="13.0.0" />
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.1" />
 		<PackageReference Include="DocumentFormat.OpenXml" Version="3.4.1" />
 		<PackageReference Include="PDFsharp-MigraDoc" Version="6.2.4" />
+		<!-- SMB client for syncing on Android, which can't mount network shares. LGPL-3.0-or-later, used unmodified. -->
+		<PackageReference Include="SMBLibrary" Version="1.5.8.1" />
 		<PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0" />
 		<PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.22.0" />

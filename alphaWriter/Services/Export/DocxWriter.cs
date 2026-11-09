@@ -1,15 +1,13 @@
 using System.Globalization;
-using DocumentFormat.OpenXml;
-using DocumentFormat.OpenXml.Packaging;
-using DocumentFormat.OpenXml.Wordprocessing;
-using Style = DocumentFormat.OpenXml.Wordprocessing.Style;
-using Paragraph = DocumentFormat.OpenXml.Wordprocessing.Paragraph;
-using Run = DocumentFormat.OpenXml.Wordprocessing.Run;
-using Text = DocumentFormat.OpenXml.Wordprocessing.Text;
-using Document = DocumentFormat.OpenXml.Wordprocessing.Document;
 
 namespace alphaWriter.Services.Export
 {
+    // Imported inside the namespace so these names win over MAUI's project-wide usings
+    // (e.g. FontSize, Font), which differ by platform and clash on Android.
+    using DocumentFormat.OpenXml;
+    using DocumentFormat.OpenXml.Packaging;
+    using DocumentFormat.OpenXml.Wordprocessing;
+
     /// <summary>
     /// Word (.docx), which Google Docs and LibreOffice also open. Standard manuscript format:
     /// 12 pt, double-spaced, 0.5" indents, 1" margins, "Surname / TITLE / page" header,
